@@ -24,10 +24,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
+#include "../common/cli.h"
 #include "../common/config.h"
 #include "../common/matrix.h"
+#include "../common/timing.h"
 
 /* Matrices estaticas: tamanio fijo conocido en tiempo de compilacion,
  * reservadas en el segmento estatico del programa (no malloc/free,
@@ -35,16 +36,6 @@
 static real_t A[(size_t)N * M];
 static real_t B[(size_t)M * P];
 static real_t C[(size_t)N * P];
-
-/* ---------------------------------------------------------------------
- * Reloj de alta resolucion (monotonico, no afectado por ajustes de
- * hora del sistema). Se usa alrededor de cada multiplicacion completa.
- * ------------------------------------------------------------------- */
-static double ahora_segundos(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
-}
 
 /* ---------------------------------------------------------------------
  * Multiplicacion ikj (orden optimizado para localidad de cache).
@@ -92,48 +83,12 @@ static void multiplicar_ikj(const real_t *restrict a, const real_t *restrict b,
     }
 }
 
-typedef struct {
-    unsigned semilla;
-    int repeticiones;
-    int csv;
-} Configuracion;
-
-static void imprimir_uso(const char *programa) {
-    fprintf(stderr,
-        "Uso: %s [--semilla S] [--repeticiones R] [--csv]\n"
-        "  (N=%d M=%d P=%d fijados en compilacion, ver src/common/config.h)\n",
-        programa, N, M, P);
-}
-
-static int parsear_argumentos(int argc, char **argv, Configuracion *config) {
-    config->semilla = 42;
-    config->repeticiones = 5;
-    config->csv = 0;
-
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--semilla") == 0 && i + 1 < argc) {
-            config->semilla = (unsigned)strtoul(argv[++i], NULL, 10);
-        } else if (strcmp(argv[i], "--repeticiones") == 0 && i + 1 < argc) {
-            config->repeticiones = atoi(argv[++i]);
-        } else if (strcmp(argv[i], "--csv") == 0) {
-            config->csv = 1;
-        } else if (strcmp(argv[i], "--help") == 0) {
-            imprimir_uso(argv[0]);
-            return 0;
-        } else {
-            fprintf(stderr, "Argumento desconocido: %s\n", argv[i]);
-            imprimir_uso(argv[0]);
-            return 0;
-        }
-    }
-
-    if (config->repeticiones <= 0) config->repeticiones = 1;
-    return 1;
-}
-
 int main(int argc, char **argv) {
-    Configuracion config;
-    if (!parsear_argumentos(argc, argv, &config)) {
+    char info_tamanio[64];
+    snprintf(info_tamanio, sizeof(info_tamanio), "N=%d M=%d P=%d", N, M, P);
+
+    ConfiguracionBenchmark config;
+    if (!cli_parsear_argumentos(argc, argv, &config, info_tamanio)) {
         return 1;
     }
 

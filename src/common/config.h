@@ -32,4 +32,10 @@
 #define BJ 64
 #endif
 
+/* Cantidad maxima de procesos MPI que soportan los arreglos estaticos
+ * de sendcounts/displs en src/mpi/*.c */
+#ifndef MAX_PROCESOS
+#define MAX_PROCESOS 1024
+#endif
+
 #endif /* HPC_CONFIG_H */

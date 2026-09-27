@@ -21,6 +21,8 @@
  *   ./matmul_ikj --csv > resultados_ikj.csv
  */
 
+#include "../common/timing.h" /* primero: define _POSIX_C_SOURCE antes de <stdio.h> */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +30,6 @@
 #include "../common/cli.h"
 #include "../common/config.h"
 #include "../common/matrix.h"
-#include "../common/timing.h"
 
 /* Matrices estaticas: tamanio fijo conocido en tiempo de compilacion,
  * reservadas en el segmento estatico del programa (no malloc/free,
@@ -92,8 +93,22 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    matriz_llenar_aleatoria(A, N, M, config.semilla);
-    matriz_llenar_aleatoria(B, M, P, config.semilla + 1);
+    if (config.archivo_a) {
+        if (matriz_leer_archivo(A, N, M, config.archivo_a) != 0) {
+            fprintf(stderr, "Error leyendo %s\n", config.archivo_a);
+            return 1;
+        }
+    } else {
+        matriz_llenar_aleatoria(A, N, M, config.semilla);
+    }
+    if (config.archivo_b) {
+        if (matriz_leer_archivo(B, M, P, config.archivo_b) != 0) {
+            fprintf(stderr, "Error leyendo %s\n", config.archivo_b);
+            return 1;
+        }
+    } else {
+        matriz_llenar_aleatoria(B, M, P, config.semilla + 1);
+    }
 
     double flops = 2.0 * (double)N * (double)M * (double)P;
 
@@ -122,6 +137,9 @@ int main(int argc, char **argv) {
                    N, M, P, r, transcurrido, gflops);
         } else {
             printf("repeticion %d: %.6f s (%.3f GFLOPS)\n", r, transcurrido, gflops);
+        }
+        if (config.imprimir) {
+            matriz_imprimir(C, N, P);
         }
     }
 

@@ -6,6 +6,7 @@
 static void imprimir_uso(const char *programa, const char *info_tamanio) {
     fprintf(stderr,
         "Uso: %s [--semilla S] [--repeticiones R] [--csv]\n"
+        "         [--archivo-a RUTA] [--archivo-b RUTA] [--imprimir]\n"
         "  (%s fijados en compilacion, ver src/common/config.h)\n",
         programa, info_tamanio);
 }
@@ -15,6 +16,9 @@ int cli_parsear_argumentos(int argc, char **argv, ConfiguracionBenchmark *config
     config->semilla = 42;
     config->repeticiones = 5;
     config->csv = 0;
+    config->archivo_a = NULL;
+    config->archivo_b = NULL;
+    config->imprimir = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--semilla") == 0 && i + 1 < argc) {
@@ -23,6 +27,12 @@ int cli_parsear_argumentos(int argc, char **argv, ConfiguracionBenchmark *config
             config->repeticiones = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--csv") == 0) {
             config->csv = 1;
+        } else if (strcmp(argv[i], "--archivo-a") == 0 && i + 1 < argc) {
+            config->archivo_a = argv[++i];
+        } else if (strcmp(argv[i], "--archivo-b") == 0 && i + 1 < argc) {
+            config->archivo_b = argv[++i];
+        } else if (strcmp(argv[i], "--imprimir") == 0) {
+            config->imprimir = 1;
         } else if (strcmp(argv[i], "--help") == 0) {
             imprimir_uso(argv[0], info_tamanio);
             return 0;

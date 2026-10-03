@@ -161,6 +161,13 @@ Y gráficos sugeridos:
 - **Por qué n grande favorece el speedup:** a mayor n, el cómputo (O(n³)) crece más rápido que la comunicación (O(n²) para enviar una matriz), por lo que la relación cómputo/comunicación mejora y el speedup se acerca más al ideal.
 - Comparen esto empíricamente con sus propios datos: ¿se ve más eficiencia en n=2048 que en n=256 para el mismo p? Esa observación es justamente la evidencia de lo anterior.
 
+### 6.1 Referencias de biblioteca (reemplazan a la implementación 2D propia)
+
+- **2D:** `PDGEMM` de ScaLAPACK (usa distribución block-cyclic 2D y un esquema tipo SUMMA/PUMMA; Choi et al. 1994, van de Geijn & Watts 1997), corrida sobre grilla Pr x Pc. Alternativas si se consiguen: COSMA, Cyclops (CTF), Elemental.
+- **1D optimizada:** `PDGEMM` con grilla degenerada P x 1 (o 1 x P) equivale a una descomposición 1D por bloques de filas (o columnas); es la contraparte de biblioteca de nuestras versiones ijk/ikj/bloqueado MPI.
+- **Cota superior local:** `dgemm` de BLAS optimizado (OpenBLAS/MKL) en np = 1 y como kernel local dentro de nuestra versión 1D.
+- A definir/verificar: instalación disponible (WSL/servidor), enlazado, y que los tiempos se midan con el mismo esquema (semilla, repeticiones, descarte de la repetición 0). Citar en la bibliografía las fuentes efectivamente usadas.
+
 ---
 
 ## 7. Conclusiones (guía de qué deberían poder afirmar)
@@ -174,7 +181,7 @@ Al cerrar el informe, traten de responder con datos propios:
 ## 8. Mejoras recomendadas para trabajo futuro (para la pregunta final del enunciado)
 
 Algunas ideas típicas y válidas para esta sección:
-- Implementar una estrategia de distribución 2D (Cannon/SUMMA) para comparar contra la 1D.
+- Implementación propia de la distribución 2D (Cannon/SUMMA): queda fuera del alcance por decisión del equipo (no la desarrollamos ni podemos explicarla en detalle); se la reemplaza por una referencia de biblioteca (ver 6.1).
 - Agregar tiling/blocking dentro de cada proceso para mejorar el uso de caché local.
 - Usar comunicación no bloqueante (`MPI_Isend`/`MPI_Irecv`) para solapar comunicación con cómputo.
 - Probar un esquema híbrido MPI+OpenMP.
@@ -185,10 +192,12 @@ Algunas ideas típicas y válidas para esta sección:
 ---
 
 ## 9. Bibliografía sugerida (punto de partida, agreguen lo que usen realmente)
+- Blackford et al. — *ScaLAPACK Users' Guide* (SIAM, 1997), sobre PDGEMM y la distribución block-cyclic.
+- Choi, Dongarra, Ostrouchov, Petitet, Walker, Whaley — "A proposal for a set of parallel basic linear algebra subprograms" / PUMMA.
 - Grama, Gupta, Karypis, Kumar — *Introduction to Parallel Computing* (capítulo de multiplicación de matrices, es la referencia clásica de Cannon/SUMMA).
 - Documentación oficial de MPI (mpi-forum.org) y de OpenMP (openmp.org).
 - Documentación de la librería MPI que usen (Open MPI o MPICH) para las funciones colectivas (`MPI_Scatterv`, `MPI_Gatherv`, `MPI_Bcast`).
-- Papers originales de Cannon (1969) y SUMMA (van de Geijn & Watts, 1995) si quieren profundizar en la parte 2D.
+- Papers originales de Cannon (1969) y SUMMA (van de Geijn & Watts, 1997) si quieren profundizar en la parte 2D (solo como marco teórico de la referencia de biblioteca).
 
 ---
 

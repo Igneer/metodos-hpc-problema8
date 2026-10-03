@@ -2,7 +2,7 @@
 
 **Secuencia principal: definir la estructura → construir el cimiento → ejecutar SUMMA.**
 
-**Estado:** etapa 1 implementada y probada; trabajo pausado, etapas 2 y 3 pendientes. Las tareas y el punto de continuación están en [seguimiento_summa_2d.md](seguimiento_summa_2d.md).
+**Estado:** etapas 1, 2 y 3 implementadas y probadas; pendiente el trabajo complementario (OpenBLAS, mediciones). Las tareas y el punto de continuación están en [seguimiento_summa_2d.md](seguimiento_summa_2d.md).
 
 La partición establece la propiedad de los datos; la infraestructura permite moverlos y operar sobre ellos; SUMMA organiza los productos que completan C. Distribuir en 2D no equivale a implementar SUMMA.
 

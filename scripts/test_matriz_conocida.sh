@@ -3,7 +3,7 @@
 # test_matriz_conocida.sh
 #
 # Compila las 8 implementaciones de multiplicacion de matrices (3
-# seriales, 3 MPI row-wise, 2 SUMMA) con N=M=P=3, las corre con la
+# seriales, 3 MPI row-wise) con N=M=P=3, las corre con la
 # matriz de tests/datos/matriz_conocida.txt como A y B, e imprime C
 # comparandolo contra A*A calculado a mano. Sirve para verificar que
 # el reparto/recoleccion de cada estrategia no tenga bugs de indices
@@ -103,15 +103,12 @@ compilar mpicc matmul_ijk_mpi src/mpi/matmul_ijk.c src/common/matrix.c src/commo
 compilar mpicc matmul_ikj_mpi src/mpi/matmul_ikj.c src/common/matrix.c src/common/cli.c src/common/particiones.c
 compilar mpicc matmul_ikjb_mpi src/mpi/matmul_ikj_bloqueado.c src/common/matrix.c src/common/cli.c src/common/particiones.c
 
-compilar mpicc matmul_summa src/mpi/matmul_summa.c src/common/matrix.c src/common/cli.c src/common/particiones.c
-
 BIN_IJK_S="$BIN_DIR/matmul_ijk_s"
 BIN_IKJ_S="$BIN_DIR/matmul_ikj_s"
 BIN_IKJB_S="$BIN_DIR/matmul_ikjb_s"
 BIN_IJK_MPI="$BIN_DIR/matmul_ijk_mpi"
 BIN_IKJ_MPI="$BIN_DIR/matmul_ikj_mpi"
 BIN_IKJB_MPI="$BIN_DIR/matmul_ikjb_mpi"
-BIN_SUMMA="$BIN_DIR/matmul_summa"
 
 echo ""
 echo "=== Corriendo ==="
@@ -124,13 +121,6 @@ for np in 1 3; do
     comparar_salida "mpi ijk (np=$np)" "$(mpirun -np "$np" "$BIN_IJK_MPI" "${ARGS[@]}")"
     comparar_salida "mpi ikj (np=$np)" "$(mpirun -np "$np" "$BIN_IKJ_MPI" "${ARGS[@]}")"
     comparar_salida "mpi ikj_bloqueado (np=$np)" "$(mpirun -np "$np" "$BIN_IKJB_MPI" "${ARGS[@]}")"
-done
-
-# SUMMA acepta cualquier np (grilla Pr x Pc factorizada, no hace
-# falta cuadrado perfecto): probamos np=2 y np=3 (grillas no
-# cuadradas) ademas de los cuadrados 1 y 4.
-for np in 1 2 3 4; do
-    comparar_salida "summa (np=$np)" "$(mpirun -np "$np" "$BIN_SUMMA" "${ARGS[@]}")"
 done
 
 echo ""

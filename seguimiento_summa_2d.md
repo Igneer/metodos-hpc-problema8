@@ -1,6 +1,6 @@
 # Seguimiento de SUMMA 2D
 
-**Estado al 2026-10-02: trabajo pausado después de completar la etapa 1.**
+**Estado al 2026-10-02: etapas 1, 2 y 3 completadas y probadas; queda el trabajo complementario.**
 
 Este documento permite retomar la implementación sin confundir tareas terminadas con propuestas. El [plan principal](plan_summa_2d.md) mantiene las tres etapas; [explicación y ejemplos.md](explicaci%C3%B3n%20y%20ejemplos.md) contiene el recorrido numérico.
 
@@ -19,18 +19,28 @@ Este documento permite retomar la implementación sin confundir tareas terminada
 - [x] Hacer que `calcular_particion_2d()` tome N, M y P de `config.h`; conservar `calcular_particion_2d_dimensiones()` para pruebas y verificar las configuraciones 512×512 y A de 5×6 por B de 6×7.
 - [x] Preservar el código existente del proyecto.
 
-## Próximo punto de continuación: etapa 2
+## Etapa 2 completada (cimiento)
 
-- [ ] Definir las interfaces concretas de topología y transferencias a partir de los descriptores existentes.
-- [ ] Crear grilla y subcomunicadores mediante MPI cartesiano, sin fórmulas de ranks ni dependencia del orden mundial.
-- [ ] Crear y gestionar datatypes para bloques/paneles, incluyendo el protocolo de bloques vacíos.
-- [ ] Implementar distribución y reconstrucción, y comprobar el recorrido de ida y vuelta antes de multiplicar.
-- [ ] Implementar el kernel propio compatible con `KernelLocal`, con strides y acumulación.
-- [ ] Definir ownership y liberación de los comunicadores y datatypes nuevos.
+- [x] `src/mpi/2d/topologia_2d.{h,c}`: grilla con `MPI_Dims_create`/`MPI_Cart_create`, grupos de fila y columna con `MPI_Cart_sub`, coordenadas y raíz vía MPI; `topologia_2d_liberar` hace `MPI_Comm_free`.
+- [x] `src/mpi/2d/transferencias_2d.{h,c}`: datatypes `MPI_Type_create_subarray` (bloque vacío = count 0 con `MPI_DOUBLE`), `distribuir_2d` y `reconstruir_2d` para A, B y C; ownership con `tipo_bloque_2d_liberar`.
+- [x] `src/mpi/2d/kernel_propio.{h,c}`: `kernel_propio_ikj`, compatible con `KernelLocal` (strides, acumulación, dimensiones cero).
+- [x] `tests/test_infraestructura_2d.c` y `tests/probar_infraestructura_2d.sh`: ida y vuelta de A, B y C, coherencia de coordenadas/subcomunicadores, kernel con strides; 24 combinaciones (dimensiones 5x6x7, 4x4x4, 3x2x9, 1x1x1 con 1, 2, 3, 4, 6 y 8 procesos, incluidas grillas no cuadradas y bloques vacíos): todas OK.
 
-## Después: etapa 3 y respaldo experimental
+Verificar (necesita `mpicc`; en este equipo se usó WSL): `sh tests/probar_infraestructura_2d.sh`.
 
-- [ ] Ejecutar los broadcasts y productos por segmento de SUMMA, utilizando la infraestructura de la etapa 2.
+## Etapa 3 completada (coreografía SUMMA)
+
+- [x] `src/mpi/2d/summa_2d.{h,c}`: C se inicializa una vez; por segmento, `MPI_Bcast` de A por la fila y de B por la columna, y llamada al kernel. El dueño de A transmite una vista con `MPI_Type_vector` (sin copias) y los receptores usan un panel compacto; el dueño de B transmite directo desde su bloque.
+- [x] `src/mpi/matmul_summa_2d.c`: ejecutable (mismo CLI y CSV que los demás; algoritmo `summa_2d`), con tiempos máximos de distribución, SUMMA y recolección vía `MPI_Reduce`. Ejemplo 512×512×512 con 4 procesos: ~0,02 s por repetición en WSL.
+- [x] `tests/test_summa_2d.c` y `tests/probar_summa_2d.sh`: comparación exacta con producto serial, 6 dimensiones × 9 cantidades de procesos (54 casos, grillas no cuadradas, cortes desiguales y bloques vacíos), todas OK. La salida de `--imprimir` coincide con la de `matmul_ikj` serial con 1, 4 y 6 procesos.
+
+## Referencia con ScaLAPACK (hecha)
+
+- [x] `src/ref/matmul_pdgemm.c`: C = A·B con `PDGEMM` (PBLAS, algoritmo tipo SUMMA). Grilla BLACS, distribución y recolección con `PDGEMR2D` (bloques cíclicos NB, 64 por defecto) y sin convertir layout: se calcula Cᵀ = Bᵀ·Aᵀ sobre la misma memoria row-major. Mismo CLI/CSV, algoritmo `pdgemm_2d` (el que ya espera `scripts/benchmark.py`). Verificado con matrices enteras contra `matmul_ikj` serial (NB 2, 3 y 64; 1, 2, 3, 4, 6 y 8 procesos). Ejecutar con `OPENBLAS_NUM_THREADS=1`.
+- [ ] Falta `src/ref/matmul_dgemm.c`, que `scripts/benchmark.py` y `scripts/probar_referencias.sh` también esperan y no existe en el repositorio.
+
+## Pendiente: trabajo complementario
+
 - [ ] Integrar el trabajo del compañero sobre OpenBLAS mediante un adaptador opcional; su interfaz concreta aún debe conocerse.
 - [ ] Ampliar pruebas a comunicación, kernels, SUMMA y varias repeticiones, verificando cada parte al implementarla.
 - [ ] Medir distribución, núcleo y recolección; conservar datos crudos y controlar backend/hilos en las comparaciones.

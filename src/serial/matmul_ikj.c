@@ -93,6 +93,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    double t_gen0 = ahora_segundos();
     if (config.archivo_a) {
         if (matriz_leer_archivo(A, N, M, config.archivo_a) != 0) {
             fprintf(stderr, "Error leyendo %s\n", config.archivo_a);
@@ -109,11 +110,12 @@ int main(int argc, char **argv) {
     } else {
         matriz_llenar_aleatoria(B, M, P, config.semilla + 1);
     }
+    double segundos_generacion = ahora_segundos() - t_gen0;
 
     double flops = 2.0 * (double)N * (double)M * (double)P;
 
     if (config.csv) {
-        printf("n,m,p,algoritmo,repeticion,segundos,gflops\n");
+        printf("n,m,p,algoritmo,repeticion,segundos,gflops,segundos_generacion\n");
     } else {
         printf("N=%d M=%d P=%d algoritmo=ikj repeticiones=%d\n",
                N, M, P, config.repeticiones);
@@ -133,8 +135,8 @@ int main(int argc, char **argv) {
         double gflops = flops / transcurrido / 1e9;
 
         if (config.csv) {
-            printf("%d,%d,%d,ikj,%d,%.9f,%.4f\n",
-                   N, M, P, r, transcurrido, gflops);
+            printf("%d,%d,%d,ikj,%d,%.9f,%.4f,%.9f\n",
+                   N, M, P, r, transcurrido, gflops, segundos_generacion);
         } else {
             printf("repeticion %d: %.6f s (%.3f GFLOPS)\n", r, transcurrido, gflops);
         }

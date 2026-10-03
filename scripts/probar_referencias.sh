@@ -7,8 +7,7 @@ cd "$(dirname "$0")/.."
 N=${1:-500}
 mkdir -p bin
 F="-std=gnu11 -Wall -Wextra -O3 -march=native -DN=$N -DM=$N -DP=$N"
-C="src/common/matrix.c src/common/cli.c"
-gcc   $F src/ref/matmul_dgemm.c $C -o bin/ref_dgemm -lopenblas
+C="src/common/matrix.c src/common/cli.c"s
 mpicc $F src/ref/matmul_pdgemm.c $C -o bin/ref_pdgemm -lscalapack-openmpi -lopenblas -lm
 ./bin/ref_dgemm --repeticiones 3
 for p in 1 2 3 4; do

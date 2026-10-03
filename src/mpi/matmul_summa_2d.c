@@ -66,6 +66,7 @@ int main(int argc, char *argv[]) {
     /* Todo lo colectivo ocurre en la grilla (reorder=1 puede cambiar ranks). */
     int soy_raiz = topologia.fila_actual == 0 && topologia.columna_actual == 0;
 
+    double t_gen0 = MPI_Wtime();
     if (soy_raiz) {
         if (config.archivo_a) {
             if (matriz_leer_archivo(A, N, M, config.archivo_a) != 0) abortar("leyendo archivo A");
@@ -78,11 +79,12 @@ int main(int argc, char *argv[]) {
             matriz_llenar_aleatoria(B, M, P, config.semilla + 1);
         }
     }
+    double segundos_generacion = MPI_Wtime() - t_gen0;
 
     double flops = 2.0 * (double)N * (double)M * (double)P;
     if (soy_raiz) {
         if (config.csv) {
-            printf("n,m,p,procesos,algoritmo,repeticion,segundos,gflops\n");
+            printf("n,m,p,procesos,algoritmo,repeticion,segundos,gflops,segundos_generacion\n");
         } else {
             printf("N=%d M=%d P=%d procesos=%d (grilla %dx%d, %d tramos) "
                    "algoritmo=summa_2d repeticiones=%d\n",
@@ -111,8 +113,8 @@ int main(int argc, char *argv[]) {
         if (soy_raiz) {
             double gflops = flops / maximo[0] / 1e9;
             if (config.csv) {
-                printf("%d,%d,%d,%d,summa_2d,%d,%.9f,%.4f\n",
-                       N, M, P, size, r, maximo[0], gflops);
+                printf("%d,%d,%d,%d,summa_2d,%d,%.9f,%.4f,%.9f\n",
+                       N, M, P, size, r, maximo[0], gflops, segundos_generacion);
             } else {
                 printf("repeticion %d: %.6f s (%.3f GFLOPS) "
                        "[distribucion %.6f, SUMMA %.6f, recoleccion %.6f]\n",

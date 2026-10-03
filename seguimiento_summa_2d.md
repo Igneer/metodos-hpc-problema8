@@ -31,12 +31,12 @@ Verificar (necesita `mpicc`; en este equipo se usó WSL): `sh tests/probar_infra
 ## Etapa 3 completada (coreografía SUMMA)
 
 - [x] `src/mpi/2d/summa_2d.{h,c}`: C se inicializa una vez; por segmento, `MPI_Bcast` de A por la fila y de B por la columna, y llamada al kernel. El dueño de A transmite una vista con `MPI_Type_vector` (sin copias) y los receptores usan un panel compacto; el dueño de B transmite directo desde su bloque.
-- [x] `src/mpi/matmul_summa_2d.c`: ejecutable (mismo CLI y CSV que los demás; algoritmo `summa_2d`), con tiempos máximos de distribución, SUMMA y recolección vía `MPI_Reduce`. Ejemplo 512×512×512 con 4 procesos: ~0,02 s por repetición en WSL.
+- [x] `src/mpi/matmul_summa_2d.c`: ejecutable (mismo CLI y CSV que los demás; algoritmo `summa_2d`), con tiempos máximos de distribución, SUMMA y recolección vía `MPI_Reduce`.
 - [x] `tests/test_summa_2d.c` y `tests/probar_summa_2d.sh`: comparación exacta con producto serial, 6 dimensiones × 9 cantidades de procesos (54 casos, grillas no cuadradas, cortes desiguales y bloques vacíos), todas OK. La salida de `--imprimir` coincide con la de `matmul_ikj` serial con 1, 4 y 6 procesos.
 
 ## Referencia con ScaLAPACK (hecha)
 
-- [x] `src/ref/matmul_pdgemm.c`: C = A·B con `PDGEMM` (PBLAS, algoritmo tipo SUMMA). Grilla BLACS, distribución y recolección con `PDGEMR2D` (bloques cíclicos NB, 64 por defecto) y sin convertir layout: se calcula Cᵀ = Bᵀ·Aᵀ sobre la misma memoria row-major. Mismo CLI/CSV, algoritmo `pdgemm_2d` (el que ya espera `scripts/benchmark.py`). Verificado con matrices enteras contra `matmul_ikj` serial (NB 2, 3 y 64; 1, 2, 3, 4, 6 y 8 procesos). Ejecutar con `OPENBLAS_NUM_THREADS=1`.
+- [x] `src/ref/matmul_pdgemm.c`: C = A·B con `PDGEMM` (PBLAS, algoritmo tipo SUMMA). Grilla BLACS, distribución y recolección con `PDGEMR2D` (bloques cíclicos NB, 64 por defecto) y sin convertir layout: se calcula Cᵀ = Bᵀ·Aᵀ sobre la misma memoria row-major. Mismo CLI/CSV, algoritmo `pdgemm_2d` (el que ya espera `scripts/benchmark.py`). Verificado con matrices enteras contra `matmul_ikj` serial (NB 2, 3 y 64; 1, 2, 3, 4, 6 y 8 procesos). Se recomienda ejecutar con `OPENBLAS_NUM_THREADS=1` para no mezclar hilos de OpenBLAS con procesos MPI.
 - [ ] Falta `src/ref/matmul_dgemm.c`, que `scripts/benchmark.py` y `scripts/probar_referencias.sh` también esperan y no existe en el repositorio.
 
 ## Pendiente: trabajo complementario

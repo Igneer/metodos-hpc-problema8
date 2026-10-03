@@ -20,8 +20,8 @@
  *   mpirun -np <procesos> ./matmul_pdgemm [--semilla S] [--repeticiones R] [--csv]
  *          [--archivo-a RUTA] [--archivo-b RUTA] [--imprimir]
  * Compilar con: -lscalapack-openmpi -lopenblas -lm   (-DNB=<bloque>, 64 por defecto)
- * Ejecutar con OPENBLAS_NUM_THREADS=1: sin eso, cada proceso MPI lanza sus
- * propios hilos de OpenBLAS y el rendimiento cae ~20x por oversubscripcion.
+ * Se recomienda ejecutar con OPENBLAS_NUM_THREADS=1: asi cada proceso MPI usa un
+ * solo hilo de OpenBLAS en lugar de lanzar los suyos.
  */
 
 #include <mpi.h>

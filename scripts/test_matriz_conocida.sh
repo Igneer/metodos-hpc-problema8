@@ -2,17 +2,22 @@
 #
 # test_matriz_conocida.sh
 #
-# Compila las 8 implementaciones de multiplicacion de matrices (3
-# seriales, 3 MPI row-wise) con N=M=P=3, las corre con la
-# matriz de tests/datos/matriz_conocida.txt como A y B, e imprime C
-# comparandolo contra A*A calculado a mano. Sirve para verificar que
-# el reparto/recoleccion de cada estrategia no tenga bugs de indices
-# antes de confiar en un benchmark de rendimiento mas grande.
+# Compila las implementaciones de multiplicacion de matrices (3
+# seriales, 3 MPI row-wise, SUMMA 2D propio y la referencia ScaLAPACK
+# PDGEMM) con N=M=P=4, las corre con dos matrices densas 4x4 de
+# tests/datos/ (A = 1..16 por filas, B = 16..1 por filas) e imprime C
+# comparandolo contra A*B calculado a mano. A y B son distintas y no
+# simetricas a proposito: asi se detecta un producto con operandos
+# invertidos o transpuestos. Sirve para verificar que el reparto y la
+# recoleccion de cada estrategia no tenga bugs de indices antes de
+# confiar en un benchmark de rendimiento mas grande.
 #
 # Uso:
 #   bash scripts/test_matriz_conocida.sh
 #
-# Requiere gcc, mpicc y mpirun en el PATH.
+# Requiere gcc, mpicc y mpirun en el PATH. La referencia PDGEMM ademas
+# necesita ScaLAPACK y OpenBLAS (-lscalapack-openmpi -lopenblas); si no se
+# pueden enlazar, esa prueba se omite con un aviso.
 
 set -uo pipefail
 
@@ -29,13 +34,14 @@ done
 BIN_DIR="$RAIZ/bin"
 mkdir -p "$BIN_DIR"
 
-MATRIZ="$RAIZ/tests/datos/matriz_conocida.txt"
-CFLAGS="-std=c11 -O2 -DN=3 -DM=3 -DP=3"
-ARGS=(--archivo-a "$MATRIZ" --archivo-b "$MATRIZ" --repeticiones 1 --imprimir)
+MATRIZ_A="$RAIZ/tests/datos/matriz_a_4x4.txt"
+MATRIZ_B="$RAIZ/tests/datos/matriz_b_4x4.txt"
+CFLAGS="-std=c11 -O2 -DN=4 -DM=4 -DP=4"
+ARGS=(--archivo-a "$MATRIZ_A" --archivo-b "$MATRIZ_B" --repeticiones 1 --imprimir)
 
-# C = A*A calculada a mano para la matriz de matriz_conocida.txt
-# (2 1 4 / 3 2 1 / 1 2 2), fila por fila.
-ESPERADO=("11 12 17" "13 9 16" "10 9 10")
+# C = A*B calculada a mano, fila por fila. Ejemplo, C[0][0] =
+# 1*16 + 2*12 + 3*8 + 4*4 = 80.
+ESPERADO=("80 70 60 50" "240 214 188 162" "400 358 316 274" "560 502 444 386")
 
 TOTAL=0
 FALLOS=0
@@ -54,14 +60,14 @@ compilar() {
     fi
 }
 
-# Compara las ultimas 3 lineas de $salida (la matriz C impresa por
+# Compara las ultimas 4 lineas de $salida (la matriz C impresa por
 # matriz_imprimir) contra $ESPERADO, valor por valor con tolerancia.
 comparar_salida() {
     local nombre="$1" salida="$2"
     TOTAL=$((TOTAL + 1))
 
     local ultimas
-    ultimas="$(printf '%s\n' "$salida" | tail -n 3)"
+    ultimas="$(printf '%s\n' "$salida" | tail -n 4)"
 
     local ok=1 filas=0
     while IFS= read -r linea_real; do
@@ -72,7 +78,7 @@ comparar_salida() {
         fi
         read -r -a vals_reales <<< "$linea_real"
         read -r -a vals_esperados <<< "$esperada"
-        for j in 0 1 2; do
+        for j in 0 1 2 3; do
             local a="${vals_reales[$j]:-}" b="${vals_esperados[$j]}"
             local diff
             diff=$(awk -v a="$a" -v b="$b" 'BEGIN {
@@ -85,7 +91,7 @@ comparar_salida() {
         filas=$((filas + 1))
     done <<< "$ultimas"
 
-    if [ "$ok" -eq 1 ] && [ "$filas" -eq 3 ]; then
+    if [ "$ok" -eq 1 ] && [ "$filas" -eq 4 ]; then
         echo "[OK]   $nombre"
     else
         FALLOS=$((FALLOS + 1))
@@ -94,7 +100,7 @@ comparar_salida() {
     fi
 }
 
-echo "=== Compilando (N=M=P=3) ==="
+echo "=== Compilando (N=M=P=4) ==="
 compilar gcc matmul_ijk_s src/serial/matmul_ijk.c src/common/matrix.c src/common/cli.c
 compilar gcc matmul_ikj_s src/serial/matmul_ikj.c src/common/matrix.c src/common/cli.c
 compilar gcc matmul_ikjb_s src/serial/matmul_ikj_bloqueado.c src/common/matrix.c src/common/cli.c
@@ -103,12 +109,27 @@ compilar mpicc matmul_ijk_mpi src/mpi/matmul_ijk.c src/common/matrix.c src/commo
 compilar mpicc matmul_ikj_mpi src/mpi/matmul_ikj.c src/common/matrix.c src/common/cli.c src/common/particiones.c
 compilar mpicc matmul_ikjb_mpi src/mpi/matmul_ikj_bloqueado.c src/common/matrix.c src/common/cli.c src/common/particiones.c
 
+compilar mpicc matmul_summa_2d src/mpi/matmul_summa_2d.c src/mpi/2d/topologia_2d.c \
+    src/mpi/2d/transferencias_2d.c src/mpi/2d/particion_2d.c src/mpi/2d/summa_2d.c \
+    src/mpi/2d/kernel_propio.c src/common/matrix.c src/common/cli.c src/common/particiones.c
+
+# La referencia ScaLAPACK es opcional: si no se puede enlazar, se omite.
+PDGEMM_OK=1
+if ! mpicc $CFLAGS src/ref/matmul_pdgemm.c src/common/matrix.c src/common/cli.c \
+        -o "$BIN_DIR/matmul_pdgemm" -lscalapack-openmpi -lopenblas -lm \
+        2>"$BIN_DIR/matmul_pdgemm.compile.log"; then
+    PDGEMM_OK=0
+    echo "AVISO: no se pudo compilar la referencia PDGEMM (ver bin/matmul_pdgemm.compile.log); se omite."
+fi
+
 BIN_IJK_S="$BIN_DIR/matmul_ijk_s"
 BIN_IKJ_S="$BIN_DIR/matmul_ikj_s"
 BIN_IKJB_S="$BIN_DIR/matmul_ikjb_s"
 BIN_IJK_MPI="$BIN_DIR/matmul_ijk_mpi"
 BIN_IKJ_MPI="$BIN_DIR/matmul_ikj_mpi"
 BIN_IKJB_MPI="$BIN_DIR/matmul_ikjb_mpi"
+BIN_SUMMA_2D="$BIN_DIR/matmul_summa_2d"
+BIN_PDGEMM="$BIN_DIR/matmul_pdgemm"
 
 echo ""
 echo "=== Corriendo ==="
@@ -121,6 +142,15 @@ for np in 1 3; do
     comparar_salida "mpi ijk (np=$np)" "$(mpirun -np "$np" "$BIN_IJK_MPI" "${ARGS[@]}")"
     comparar_salida "mpi ikj (np=$np)" "$(mpirun -np "$np" "$BIN_IKJ_MPI" "${ARGS[@]}")"
     comparar_salida "mpi ikj_bloqueado (np=$np)" "$(mpirun -np "$np" "$BIN_IKJB_MPI" "${ARGS[@]}")"
+done
+
+# Grillas 2x2 (np=4) y 3x2 (np=6, con bloques vacios porque N=4).
+export OPENBLAS_NUM_THREADS=1
+for np in 1 2 3 4 6; do
+    comparar_salida "mpi summa_2d (np=$np)" "$(mpirun --oversubscribe -np "$np" "$BIN_SUMMA_2D" "${ARGS[@]}")"
+    if [ "$PDGEMM_OK" -eq 1 ]; then
+        comparar_salida "scalapack pdgemm (np=$np)" "$(mpirun --oversubscribe -np "$np" "$BIN_PDGEMM" "${ARGS[@]}")"
+    fi
 done
 
 echo ""

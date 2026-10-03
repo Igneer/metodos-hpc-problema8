@@ -63,10 +63,10 @@ fi
 PRESUPUESTO=$(awk -v g="$RAM_GB" 'BEGIN{printf "%d", g*1073741824}')
 
 [ -z "$NS" ] && NS="500 1000 1500 2000 3000 4000 5000 7500 10000"
-# Procesos MPI: potencias de 2 desde 2 hasta CORES, mas CORES (sin p=1: ya esta el
-# serial). Nunca oversubscribe. Con 1 core no queda ninguno y no corren los MPI.
+# Procesos MPI: 1 y potencias de 2 hasta CORES, mas CORES (p=1 sirve de base del
+# speedup MPI, aparte del serial). Nunca oversubscribe.
 if [ -z "$PS" ]; then
-  PS=""; p=2; while [ $p -lt "$CORES" ]; do PS="$PS $p"; p=$((p*2)); done
+  PS=1; p=2; while [ $p -lt "$CORES" ]; do PS="$PS $p"; p=$((p*2)); done
   [ "$CORES" -gt 1 ] && PS="$PS $CORES"
 fi
 ALL="serial_ikj serial_ikj_bloqueado mpi_ikj mpi_ikj_bloqueado"   # sin ijk (disponible con --algoritmos)

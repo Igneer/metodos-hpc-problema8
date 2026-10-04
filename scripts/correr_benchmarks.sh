@@ -69,10 +69,10 @@ if [ -z "$PS" ]; then
   PS=1; p=2; while [ $p -lt "$CORES" ]; do PS="$PS $p"; p=$((p*2)); done
   [ "$CORES" -gt 1 ] && PS="$PS $CORES"
 fi
-ALL="serial_ikj serial_ikj_bloqueado mpi_ikj mpi_ikj_bloqueado"   # sin ijk (disponible con --algoritmos)
+ALL="serial_ikj serial_ikj_bloqueado mpi_ikj mpi_ikj_bloqueado ref_pdgemm"   # sin ijk (disponible con --algoritmos)
 case "$SOLO" in
   seriales) [ -z "$ALGS" ] && ALGS="serial_ikj serial_ikj_bloqueado";;
-  mpi)      [ -z "$ALGS" ] && ALGS="mpi_ikj mpi_ikj_bloqueado";;
+  mpi)      [ -z "$ALGS" ] && ALGS="mpi_ikj mpi_ikj_bloqueado ref_pdgemm";;
   ""|todos) ;;
   *) echo "--solo debe ser seriales, mpi o todos" >&2; exit 1;;
 esac
@@ -88,6 +88,7 @@ coef_mem() { # alg p
   case $1 in
     serial_*) echo 24;;
     mpi_ijk|mpi_ikj|mpi_ikj_bloqueado) echo $((8 * ($2 + 4)));;   # B replicada en cada rank
+    ref_pdgemm) echo 48;;   # A,B,C globales en la raiz + bloques locales (~2x)
     *)                   echo 64;;                  # (no usado)
   esac
 }
@@ -107,9 +108,20 @@ touch "$HECHOS" "$FALLOS"
 FLAGS="-std=gnu11 -O3 -march=native"
 [ "$(uname -m)" = x86_64 ] && FLAGS="$FLAGS -mcmodel=medium"   # BSS > 2 GB
 COM="src/common/matrix.c src/common/cli.c"
+# Libs de ScaLAPACK/OpenBLAS para ref_pdgemm. Debian/Ubuntu: -lscalapack-openmpi.
+# Con conda-forge (libscalapack.so en $CONDA_PREFIX/lib) se autodetecta; o definir
+# SCALAPACK_LIBS="..." a mano.
+if [ -z "${SCALAPACK_LIBS:-}" ]; then
+  if [ -n "${CONDA_PREFIX:-}" ] && ls "$CONDA_PREFIX"/lib/libscalapack.so* >/dev/null 2>&1; then
+    SCALAPACK_LIBS="-L$CONDA_PREFIX/lib -Wl,-rpath,$CONDA_PREFIX/lib -lscalapack -lopenblas"
+  else
+    SCALAPACK_LIBS="-lscalapack-openmpi -lopenblas"
+  fi
+fi
 src_de() { case $1 in
   serial_*) echo "gcc src/serial/matmul_${1#serial_}.c $COM -lm";;
   mpi_*) echo "mpicc src/mpi/matmul_${1#mpi_}.c src/common/particiones.c $COM -lm";;
+  ref_pdgemm) echo "mpicc src/ref/matmul_pdgemm.c $COM $SCALAPACK_LIBS -lm";;
 esac; }
 compilar() { # alg n
   local exe=$BIN/${1}_$2
@@ -125,6 +137,9 @@ compilar() { # alg n
 disponible() { # alg
   case $1 in
     mpi_*) command -v mpicc >/dev/null || return 1;;
+    ref_pdgemm) command -v mpicc >/dev/null || return 1
+                # prueba de enlace real (ldconfig no ve librerias de conda)
+                echo 'int main(void){return 0;}' |                   mpicc -x c - -o /dev/null $SCALAPACK_LIBS 2>/dev/null || return 1;;
   esac; return 0
 }
 

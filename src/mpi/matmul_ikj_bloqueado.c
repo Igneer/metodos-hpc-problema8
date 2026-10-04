@@ -44,7 +44,7 @@ static int min_int(int a, int b) {
     return a < b ? a : b;
 }
 
-/* Version bloqueada de ikj: los tres loops externos (ii, kk, jj)
+/* Version bloqueada de ikj: los tres loops externos (ii, jj, kk)
  * recorren en bloques BI x BK x BJ; el cuerpo interno es el mismo ikj
  * de siempre, acotado al bloque actual. c debe venir en cero. */
 static void multiplicar_ikj_bloqueada(const real_t *restrict a,

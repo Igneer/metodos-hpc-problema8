@@ -24,8 +24,8 @@
  * src/common/config.h), no parametros de linea de comandos: las
  * matrices son estaticas (viven en BSS, no en el heap). Para otro
  * tamanio o bloque, recompilar con -DN=... -DM=... -DP=...
- * (BI/BK/BJ se calculan solo a partir de la L2, ver src/common/bloque.h;
- * se pueden forzar con -DBI=... -DBK=... -DBJ=...)
+ * (BI/BK/BJ valen 64 por defecto, ver src/common/bloque.h; se pueden
+ * cambiar con -DBLOQUE=... o -DBI=... -DBK=... -DBJ=...)
  *
  * Uso:
  *   matmul_ikj_bloqueado [--semilla S] [--repeticiones R] [--csv]
@@ -64,12 +64,12 @@ static int min_int(int a, int b) {
 /* ---------------------------------------------------------------------
  * Multiplicacion ikj bloqueada (cache blocking/tiling).
  *
- * Los tres loops externos (ii, kk, jj) recorren la matriz en bloques
+ * Los tres loops externos (ii, jj, kk) recorren la matriz en bloques
  * de BI x BK x BJ. El cuerpo interno es exactamente el mismo ikj de
  * siempre (ver matmul_ikj.c), pero acotado al rango [ii, ii+BI) x
  * [kk, kk+BK) x [jj, jj+BJ) en vez de barrer 0..n, 0..m, 0..p enteros.
  *
- * Orden elegido para los loops de bloque (ii, kk, jj): para un bloque
+ * Orden elegido para los loops de bloque (ii, jj, kk): para un bloque
  * de filas de C fijo (ii) y un bloque de columnas fijo (jj), se
  * recorren todos los bloques kk antes de pasar al siguiente jj. Eso
  * hace que el bloque de C (BI x BJ) se mantenga en cache acumulando

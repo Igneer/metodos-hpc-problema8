@@ -1,5 +1,4 @@
 perfil,n,procesos,algoritmo,repeticion,segundos,gflops,segundos_generacion
-perfil,n,procesos,algoritmo,repeticion,segundos,gflops,segundos_generacion
 servidor,500,1,serial_ikj,0,0.014046163,17.7985,0.007844517
 servidor,500,1,serial_ikj,1,0.013787378,18.1325,0.007844517
 servidor,500,1,serial_ikj,2,0.013820399,18.0892,0.007844517

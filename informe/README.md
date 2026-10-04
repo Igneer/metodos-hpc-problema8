@@ -28,7 +28,7 @@ El análisis de resultados, realizado en un equipo de 48 cores y 192 GB de RAM, 
 | [4. Partición unidimensional (1D)](#4-partición-unidimensional-1d) | Estrategia, aplicación a las versiones seriales, beneficios y limitaciones. |
 | [5. Partición bidimensional y el algoritmo SUMMA](#5-partición-bidimensional-y-el-algoritmo-summa) | Distribución 2D, algoritmo SUMMA con ejemplo paso a paso y alcance del proyecto. |
 | [6. ScaLAPACK como referencia de la distribución 2D](#6-scalapack-como-referencia-de-la-distribución-2d) | Elección de la biblioteca, correspondencia función a función con SUMMA, optimizaciones y el truco del orden *column-major*. |
-| [7. Análisis de resultados](#7-análisis-de-resultados) | Métricas, gráficos, ley de Amdahl, efecto de $p$ y de $n$, contraste con los datos propios. |
+| [7. Análisis de resultados](#7-análisis-de-resultados) | Métricas, gráficos, ley de Amdahl, efecto de $p$ y de $n$, contraste con los datos propios y comparación con un bloque mayor (7.9). |
 | [8. Mejoras propuestas y perspectivas](#8-mejoras-propuestas-y-perspectivas) | Generación distribuida, paginación, distribución dinámica, clústeres, GPU, SLATE y cuBLASMp. |
 | [9. Bibliografía](#9-bibliografía) | Fuentes citadas. |
 
@@ -204,7 +204,7 @@ Para cada fila $i$ de $A$, el bucle $k$ recorre **todas** las filas de $B$. Si $
 
 ### 2.3 Segunda mejora: blocking (teselado)
 
-La idea del *blocking* es operar sobre submatrices ("bloques" o "teselas") lo bastante pequeñas como para que los bloques activos —uno de $A$, uno de $B$ y uno de $C$— se reutilicen intensamente desde la caché antes de ser desalojados (en la práctica, lo que más importa es que quepa el bloque de $B$; ver la elección del tamaño más abajo). En lugar de recorrer cada dimensión de punta a punta, se la recorre de a $b$ elementos:
+La idea del *blocking* es operar sobre submatrices ("bloques" o "teselas") lo bastante pequeñas como para que los bloques activos —uno de $A$, uno de $B$ y uno de $C$— se reutilicen intensamente desde la caché antes de ser desalojados (qué tamaño es el mejor depende de la máquina; ver la elección del tamaño más abajo). En lugar de recorrer cada dimensión de punta a punta, se la recorre de a $b$ elementos:
 
 ```c
 for (int ii = 0; ii < n; ii += b)          // bloque de filas de C y A
@@ -259,15 +259,14 @@ El resultado, $C_{00} = \begin{pmatrix}10&14\\26&30\end{pmatrix}$, coincide con 
 
 #### Elección del tamaño de bloque
 
-El proyecto no fija $b$ a mano: lo calcula a partir de la caché L2 de la máquina (`src/common/bloque.h`). Se exige que el bloque de $B$, que es el que se relee en el bucle interno, ocupe como máximo el 40 % de la L2:
+El proyecto usa por defecto $b = 64$ (un bloque de $B$ de $64 \times 64$ doubles, 32 KiB), con $b_i = b_k = b_j$. Es un parámetro de compilación (`-DBI`, `-DBK`, `-DBJ`, o `-DBLOQUE` para los tres; ver `src/common/bloque.h`). Una primera versión lo derivaba de la caché L2 de la máquina (los tres bloques activos en la mitad de la L2), pero se abandonó: un barrido de $b$ en dos máquinas distintas mostró que el óptimo depende de la jerarquía de caché de cada una y que una fórmula basada en la L2 no sirve en ambas.
 
-$$
-b^2 \cdot 8\ \text{bytes} \;\le\; 0{,}4 \cdot L2,
-$$
+**Barrido de $b$.** Se midió la versión serial bloqueada con `scripts/barrido_bloque.sh` (5 repeticiones por punto, GFLOPS medios), en dos máquinas:
 
-y se redondea hacia abajo a múltiplo de 8 (una línea de caché), con un mínimo de 16 y un máximo de 512. Por ejemplo, una L2 de 256 KB da $b = 112$; una de 512 KB, $b = 160$; una de 1 MB, $b = 224$. El valor es un parámetro ajustable (`-DBI`, `-DBK`, `-DBJ`).
+- **Servidor:** AMD EPYC 7B12, L1d de 32 KiB y L2 de 512 KiB por core, con $n \in \{2000, 4000, 7500\}$ (`resultados/servidor/barrido_bloque.csv`).
+- **Portátil:** Intel Core Ultra 9 185H (núcleos P con L1d de 48 KiB y L2 de 2 MiB), con $n \in \{1000, 2000, 4000\}$ (`resultados/local/barrido_bloque.csv`).
 
-**Cómo se llegó al 40 %.** Una primera versión exigía que los *tres* bloques activos ocuparan la mitad de la L2 ($3\,b^2 \cdot 8 \le L2/2$). Para comprobarla se barrió $b$ en la versión serial bloqueada sobre un AMD EPYC 7B12 (L2 de 512 KiB por core), con $n \in \{2000, 4000, 7500\}$ y 5 repeticiones por punto (`resultados/servidor/barrido_bloque.csv`; GFLOPS medios):
+Servidor:
 
 | $b$ | $n=2000$ | $n=4000$ | $n=7500$ |
 |---:|---:|---:|---:|
@@ -281,17 +280,30 @@ y se redondea hacia abajo a múltiplo de 8 (una línea de caché), con un mínim
 | 192 | 16,54 | 16,42 | 15,83 |
 | 256 | 13,72 | 13,53 | 12,69 |
 
+Portátil:
+
+| $b$ | $n=1000$ | $n=2000$ | $n=4000$ |
+|---:|---:|---:|---:|
+| 32 | 25,05 | 20,93 | 22,70 |
+| 64 | 29,16 | 27,96 | 27,66 |
+| 96 | 25,05 | 23,21 | 23,04 |
+| 128 | 24,98 | 22,93 | 23,90 |
+| 160 | 23,89 | 22,88 | 28,74 |
+| 192 | 20,20 | 19,48 | 20,32 |
+| 256 | 21,06 | 20,45 | 21,93 |
+
 Lo que muestran los datos:
 
-- **El tamaño de bloque importa.** Entre el peor y el mejor $b$ hay hasta un 33 % de diferencia (con $n=7500$, de 11,90 a 15,83 GFLOPS).
-- **Hay una meseta entre $b=144$ y $b=192$**, con diferencias menores al 1,5 % entre puntos vecinos, dentro del ruido de medición. Pasar del bloque de 64 que se usó al principio a esa meseta mejora entre un 10 % y un 18 % según $n$.
-- **Los extremos rinden peor:** $b=32$ reutiliza poco cada bloque y paga más overhead de bucles; $b=256$ cae en los tres tamaños.
-- **La regla de los tres bloques en $L2/2$ subestimaba el óptimo.** Con L2 de 512 KiB daba $b=104$, por debajo de la meseta. Y los mejores valores ($b=160$–$192$) usan entre 600 y 860 KiB para los tres bloques, más que la L2 entera, pero igual rinden bien. Nuestra interpretación, que **no se verificó con contadores de caché**, es que lo decisivo es que el bloque de $B$ (200–300 KiB) permanezca en L2, mientras que $A$ y $C$ se recorren de forma contigua y toleran salir de ella. Con el 40 % de la L2 sale $b=160$, dentro de la meseta.
+- **El tamaño de bloque importa en las dos máquinas.** La diferencia entre el peor y el mejor $b$ es de hasta un 33 % en el servidor (con $n=7500$, de 11,90 a 15,83 GFLOPS) y de hasta un 31 % en el portátil (con $n=1000$, de 20,20 a 29,16).
+- **El óptimo es distinto en cada máquina.** En el servidor hay una meseta entre $b=144$ y $b=192$, con diferencias menores al 1,5 % entre puntos vecinos, que mejora entre un 10 % y un 18 % sobre $b=64$. En el portátil el máximo está en $b=64$ para los tres $n$, y $b \ge 192$ pierde entre un 25 % y un 30 %.
+- **Los extremos no son buenos en ninguna:** $b=32$ reutiliza poco cada bloque, y $b=256$ cae en las dos máquinas.
+- **Una fórmula basada en la L2 no sirve para las dos.** Con una L2 de 512 KiB (servidor) el óptimo cae cerca del 40 % de la L2 para el bloque de $B$; con los 2 MiB de L2 de un núcleo P del portátil, esa misma regla daría $b \approx 320$, peor que 64. Una regla basada en la L1d (32 KiB del bloque de $B$ de $b=64$ entran en los 48 KiB del portátil) acierta en el portátil pero daría $b \approx 48$ en el servidor, por debajo de su meseta. Nuestra hipótesis, que **no se verificó con contadores de caché**, es que el óptimo depende de cómo se combinan los tamaños de L1d y L2 de cada máquina. Por eso se dejó $b=64$ fijo, que además es el valor con el que se midieron todos los benchmarks del informe.
 
 Limitaciones que hay que tener presentes:
 
-- **Anomalía en $n=4000$, $b=160$:** 19,3 GFLOPS, un 18-19 % por encima de $b=144$ y $b=176$, reproducida en cuatro mediciones. No aparece con $n=2000$ ni $n=7500$ y no se identificó la causa. No se tomó como argumento para elegir 160, que se justifica por estar en la meseta. Como el serial bloqueado es la base del speedup de la versión MPI bloqueada, este punto **infla el speedup en $n=4000$** y debe leerse con esa salvedad.
-- **Una sola máquina y un solo proceso.** El 40 % se calibró en un único servidor, y no se midió en otras caches ni con varios procesos MPI compartiendo L3. En otra máquina conviene repetir el barrido.
+- **Anomalía en $n=4000$, $b=160$.** En el servidor da 19,3 GFLOPS, un 18-19 % por encima de $b=144$ y $b=176$, reproducida en cuatro mediciones; en el portátil da 28,7, un 20 % por encima de $b=128$, mientras que con $n=1000$ y $n=2000$ no aparece. Que se repita en dos CPU distintas indica que depende de la combinación $n=4000$, $b=160$ y no del hardware, pero no se identificó el mecanismo. Como el serial bloqueado es la base del speedup de la versión MPI, un $b=160$ **inflaría el speedup en $n=4000$**; con $b=64$ no ocurre.
+- **Dos máquinas, un solo proceso.** Los barridos son de la versión serial; no se midió con varios procesos MPI compartiendo L3. El portátil tiene núcleos P y E, y el sistema operativo puede mover el proceso entre ellos, lo que agrega ruido a esas mediciones.
+- **El servidor podría rendir hasta ~10 % más** usando un $b$ de la meseta (por ejemplo `-DBLOQUE=160` o `192`). Es un ajuste posible, no incluido en los resultados del informe.
 
 ### 2.4 Datos y entorno de la comparación
 
@@ -948,6 +960,65 @@ Visto en términos de speedup absoluto contra el mejor serial, con 48 procesos y
 | ¿Qué efecto tiene $n$? | A mayor $n$, mejor relación cómputo/comunicación y mejor eficiencia ($E$ de 0,37 a 0,85 con $p = 16$ entre $n = 500$ y $n = 10\,000$). |
 | ¿1D o 2D? | En un nodo con mucha memoria, la 1D bloqueada iguala a `PDGEMM` en tiempo absoluto para $n \ge 7500$; la ventaja de la 2D es estructural (memoria y comunicación por proceso) y se hace relevante a mayor escala. |
 
+### 7.9 Efecto de un bloque mayor: $b = 160$ frente a $b = 64$
+
+Todo el análisis anterior se hizo con bloques de $64 \times 64$ ($b = 64$). Como el barrido de la sección 2.3 mostró que en este servidor el rendimiento es mayor con bloques de 144 a 192, se repitieron las dos versiones bloqueadas (`ikj` bloqueado serial y `ikj` bloqueado 1D) con **bloques de $160 \times 160$** (`BI = BK = BJ = 160`), con los mismos $n$ y el mismo número de repeticiones, en una corrida independiente de la de $b = 64$. Esta sección compara ambas; el resto del capítulo no se modificó y sigue refiriéndose a $b = 64$. Los datos de la corrida con $b = 160$ están en `resultados/servidor/crudo_mayor_bloque.csv` y la figura se genera con `scripts/comparar_bloques.py`.
+
+Se comparan los $p$ comunes a las dos corridas ($p \in \{1, 2, 4, 8, 16, 32, 48\}$; la corrida con $b = 160$ no incluyó $p = 6, 12, 24$). Todos los valores son medianas. $S_{abs}$ es el speedup contra el serial bloqueado **del mismo $b$**, y $S_{rel}$ el de la propia versión paralela con $p = 1$.
+
+![Comparación entre bloques de 64 y de 160](img/bloque_64_vs_160.png)
+
+*Figura 7.3. Rendimiento del serial bloqueado (izquierda), rendimiento de la versión 1D bloqueada con $p = 48$ (centro) y su speedup absoluto contra el serial del mismo $b$ (derecha), para $b = 64$ y $b = 160$.*
+
+**Tabla 7.3.** Versión serial bloqueada:
+
+| $n$ | $T$ con 64 (s) | $T$ con 160 (s) | GFLOPS (64) | GFLOPS (160) | Reducción del tiempo |
+|--:|--:|--:|--:|--:|--:|
+| 500 | 0,0176 | 0,0141 | 14,2 | 17,7 | 20 % |
+| 1000 | 0,135 | 0,108 | 14,8 | 18,5 | 20 % |
+| 1500 | 0,488 | 0,390 | 13,8 | 17,3 | 20 % |
+| 2000 | 1,104 | 0,835 | 14,5 | 19,2 | 24 % |
+| 3000 | 3,798 | 2,931 | 14,2 | 18,4 | 23 % |
+| 4000 | 8,744 | 6,359 | 14,6 | 20,1 | 27 % |
+| 5000 | 17,86 | 13,60 | 14,0 | 18,4 | 24 % |
+| 7500 | 63,26 | 49,22 | 13,3 | 17,1 | 22 % |
+| 10000 | 144,30 | 104,77 | 13,9 | 19,1 | 27 % |
+
+**Tabla 7.4.** Versión 1D bloqueada con $p = 48$:
+
+| $n$ | $T$ con 64 (s) | $T$ con 160 (s) | GFLOPS (64) | GFLOPS (160) | $S_{abs}$ (64) | $S_{abs}$ (160) | Reducción del tiempo |
+|--:|--:|--:|--:|--:|--:|--:|--:|
+| 500 | 0,0018 | 0,0018 | 138 | 138 | 9,7 | 7,8 | 0 % |
+| 1000 | 0,0132 | 0,0127 | 151 | 158 | 10,2 | 8,5 | 4 % |
+| 1500 | 0,0352 | 0,0350 | 192 | 193 | 13,8 | 11,2 | 1 % |
+| 2000 | 0,0681 | 0,0657 | 235 | 244 | 16,2 | 12,7 | 4 % |
+| 3000 | 0,186 | 0,186 | 290 | 290 | 20,4 | 15,7 | 0 % |
+| 4000 | 0,403 | 0,345 | 318 | 371 | 21,7 | 18,4 | 14 % |
+| 5000 | 0,735 | 0,683 | 340 | 366 | 24,3 | 19,9 | 7 % |
+| 7500 | 2,496 | 1,950 | 338 | 433 | 25,3 | 25,2 | 22 % |
+| 10000 | 6,157 | 5,143 | 325 | 389 | 23,4 | 20,4 | 16 % |
+
+**Tabla 7.5.** Versión 1D bloqueada con $n = 10\,000$ en función de $p$:
+
+| $p$ | $T$ con 64 (s) | $T$ con 160 (s) | $S_{abs}$ (64) | $S_{abs}$ (160) | $S_{rel}$ (64) | $S_{rel}$ (160) |
+|--:|--:|--:|--:|--:|--:|--:|
+| 1 | 141,24 | 132,03 | 1,02 | 0,79 | 1,00 | 1,00 |
+| 2 | 72,34 | 66,28 | 1,99 | 1,58 | 1,95 | 1,99 |
+| 4 | 36,99 | 33,53 | 3,90 | 3,12 | 3,82 | 3,94 |
+| 8 | 19,24 | 17,07 | 7,50 | 6,14 | 7,34 | 7,73 |
+| 16 | 10,35 | 9,236 | 13,95 | 11,34 | 13,65 | 14,29 |
+| 32 | 6,599 | 5,753 | 21,87 | 18,21 | 21,40 | 22,95 |
+| 48 | 6,157 | 5,143 | 23,44 | 20,37 | 22,94 | 25,67 |
+
+Lo que muestran los datos:
+
+- **El tiempo absoluto mejora en todas las configuraciones comparadas.** El serial reduce su tiempo entre un 20 % y un 27 % (de 13–15 a 17–20 GFLOPS). La versión 1D con $p = 48$ lo reduce menos y de forma desigual: nada con $n = 500$ y $n = 3000$, entre un 1 % y un 7 % con $n = 1000$, $1500$, $2000$ y $5000$, y un 14 %, 22 % y 16 % con $n = 4000$, $7500$ y $10\,000$. El máximo pasa de 338 a 433 GFLOPS ($n = 7500$, $p = 48$).
+- **El speedup absoluto $S_{abs}$ baja** en todos los tamaños salvo $n = 7500$, donde queda igual (25,3 frente a 25,2). No es un empeoramiento del paralelo: el denominador (el serial) mejoró más que la versión paralela. Con $n = 10\,000$ y $p = 48$, el tiempo paralelo baja de 6,16 s a 5,14 s, pero $S_{abs}$ pasa de 23,4 a 20,4. Es la medida más exigente, porque la base serial es mejor.
+- **El escalado propio ($S_{rel}$) no empeora**: es igual o algo mayor con $b = 160$ (con $n = 10\,000$ y $p = 48$, 25,7 frente a 22,9). El bloque mayor no cambia cómo escala la versión paralela con $p$.
+- **Con $p = 1$ la versión MPI ya no iguala al serial.** Con $b = 64$ el cociente serial/MPI($p=1$) vale entre 0,98 y 1,03 (son prácticamente el mismo código). Con $b = 160$ vale entre 0,79 y 0,91: el serial rinde 17–20 GFLOPS y la versión MPI con un proceso, 14,4–16,2. Es decir, el bloque mayor beneficia más al serial que a la versión MPI con un proceso, y esto explica parte de la caída de $S_{abs}$. No se identificó la causa.
+
+En resumen: con un bloque mayor el programa es más rápido en términos absolutos (hasta 433 GFLOPS frente a 338), pero el speedup contra su mejor serial no aumenta, porque la base serial mejora tanto o más. Las conclusiones de la sección 7.8 se mantienen.
+
 
 ---
 
@@ -994,13 +1065,13 @@ Todas las distribuciones del trabajo son **estáticas**: se deciden antes de emp
 - **Esquema híbrido MPI + OpenMP.** Un proceso MPI por nodo (o por socket) con hilos dentro. En la versión 1D, 48 procesos mantienen 48 copias de $B$ (38 GB con $n = 10\,000$); con un proceso de 48 hilos hay **una sola copia** (0,8 GB). Reduce también el número de participantes en las colectivas.
 - **Comparación con el mismo kernel local.** Usar `DGEMM` de OpenBLAS como kernel de la versión 1D permitiría aislar el efecto de la partición (1D frente a 2D) del efecto del kernel, que en el capítulo 7 están mezclados.
 - **Cronometrar cada fase** (distribución, cómputo, recolección) en las versiones 1D, para separar comunicación de contención de memoria.
-- **Barrer el tamaño del bloque** del blocking para encontrar el óptimo experimental en cada máquina, en lugar de derivarlo de la caché L2.
+- **Autoajuste del tamaño de bloque.** El barrido de la sección 2.3 mostró que el óptimo depende de la máquina (144–192 en el servidor, 64 en el portátil). Un barrido corto al instalar, o una regla que combine L1d y L2, permitiría elegirlo sin intervención; y repetirlo en la versión MPI bloqueada, con varios procesos compartiendo L3.
 - **Algoritmos que evitan comunicación (2.5D / 3D).** Utilizan memoria adicional para replicar datos en $c$ capas de la grilla y reducir el volumen comunicado, intercambiando memoria por comunicación.
 - **Implementación propia de SUMMA,** que quedó fuera del alcance (sección 5.3), con la grilla cartesiana de MPI, tipos de datos derivados para describir las losetas y un kernel local intercambiable.
 
 ### 8.6 El estado del arte: clústeres con nodos y GPU
 
-Hoy la optimización de la multiplicación de matrices se estudia sobre todo en **clústeres**, paralelizando entre nodos (MPI) y dentro de cada nodo con **GPU**. Hay varios motivos para que el cómputo haya migrado a los aceleradores:
+Hoy la optimización de la multiplicación de matrices se estudia sobre todo en **clústeres**, paralelizando entre nodos y dentro de cada nodo con **GPU**. Hay varios motivos para que el cómputo haya migrado a los aceleradores:
 
 - **Ancho de banda de memoria.** Una memoria DDR5 de un procesador de escritorio entrega del orden de decenas de GB/s, mientras que la memoria HBM (*High Bandwidth Memory*), apilada en el mismo encapsulado de la GPU, supera los 2000 GB/s y llega a unos 3 TB/s en las arquitecturas más recientes (cifras de las hojas técnicas de los fabricantes). Como la multiplicación de matrices está limitada por el movimiento de datos, ese ancho de banda es decisivo.
 - **Tensor Cores.** Desde la arquitectura Volta, las GPU de NVIDIA incorporan circuitos diseñados para ejecutar la operación *multiplicación y acumulación de matrices* sobre pequeñas fracciones de matriz en un solo ciclo de reloj, lo que convierte a la GPU en un circuito casi específico para esta operación.

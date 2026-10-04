@@ -1,0 +1,5 @@
+fecha: 2026-10-04T09:50:01-03:00
+host: Sofia
+cores: 48 ram_gb: 192
+gcc.exe (Rev13, Built by MSYS2 project) 15.2.0
+flags: -std=gnu11 -O3 -march=native -mcmodel=medium

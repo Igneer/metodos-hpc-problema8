@@ -6,7 +6,7 @@
  * tres dimensiones (i, k, j). Mismo algoritmo O(n*m*p) y mismo
  * cuerpo interno que matmul_ikj.c; la diferencia es que en vez de
  * barrer cada dimension de punta a punta, se recorre en bloques de
- * tamanio BI/BK/BJ (ver src/common/config.h) para que los datos
+ * tamanio BI/BK/BJ (ver src/common/bloque.h) para que los datos
  * activos de A, B y C quepan juntos en la cache (L2 tipicamente) y
  * se reutilicen antes de ser desalojados.
  *
@@ -20,11 +20,12 @@
  * antes de pasar al siguiente bloque, para que el bloque de B en uso
  * siga resonando en cache mientras se reutiliza.
  *
- * N, M, P (y BI, BK, BJ) son constantes de compilacion (ver
+ * N, M, P son constantes de compilacion (ver
  * src/common/config.h), no parametros de linea de comandos: las
  * matrices son estaticas (viven en BSS, no en el heap). Para otro
  * tamanio o bloque, recompilar con -DN=... -DM=... -DP=...
- * -DBI=... -DBK=... -DBJ=...
+ * (BI/BK/BJ se calculan solo a partir de la L2, ver src/common/bloque.h;
+ * se pueden forzar con -DBI=... -DBK=... -DBJ=...)
  *
  * Uso:
  *   matmul_ikj_bloqueado [--semilla S] [--repeticiones R] [--csv]
@@ -41,6 +42,7 @@
 #include <string.h>
 
 #include "../common/cli.h"
+#include "../common/bloque.h"
 #include "../common/config.h"
 #include "../common/matrix.h"
 
@@ -79,13 +81,15 @@ static int min_int(int a, int b) {
 static void multiplicar_ikj_bloqueada(const real_t *restrict a,
                                        const real_t *restrict b,
                                        real_t *restrict c,
-                                       int n, int m, int p) {
-    for (int ii = 0; ii < n; ii += BI) {
-        int i_fin = min_int(ii + BI, n);
-        for (int jj = 0; jj < p; jj += BJ) {
-            int j_fin = min_int(jj + BJ, p);
-            for (int kk = 0; kk < m; kk += BK) {
-                int k_fin = min_int(kk + BK, m);
+                                       int n, int m, int p,
+                                       TamanioBloque tb) {
+    const int bi = tb.bi, bk = tb.bk, bj = tb.bj;
+    for (int ii = 0; ii < n; ii += bi) {
+        int i_fin = min_int(ii + bi, n);
+        for (int jj = 0; jj < p; jj += bj) {
+            int j_fin = min_int(jj + bj, p);
+            for (int kk = 0; kk < m; kk += bk) {
+                int k_fin = min_int(kk + bk, m);
 
                 /* Cuerpo ikj de siempre, acotado al bloque actual. */
                 for (int i = ii; i < i_fin; i++) {
@@ -105,8 +109,9 @@ static void multiplicar_ikj_bloqueada(const real_t *restrict a,
 
 int main(int argc, char **argv) {
     char info_tamanio[96];
+    const TamanioBloque tb = bloque_calcular();
     snprintf(info_tamanio, sizeof(info_tamanio),
-             "N=%d M=%d P=%d, BI=%d BK=%d BJ=%d", N, M, P, BI, BK, BJ);
+             "N=%d M=%d P=%d, BI=%d BK=%d BJ=%d", N, M, P, tb.bi, tb.bk, tb.bj);
 
     ConfiguracionBenchmark config;
     if (!cli_parsear_argumentos(argc, argv, &config, info_tamanio)) {
@@ -138,14 +143,14 @@ int main(int argc, char **argv) {
         printf("n,m,p,algoritmo,repeticion,segundos,gflops,segundos_generacion\n");
     } else {
         printf("N=%d M=%d P=%d algoritmo=ikj_bloqueado (BI=%d BK=%d BJ=%d) repeticiones=%d\n",
-               N, M, P, BI, BK, BJ, config.repeticiones);
+               N, M, P, tb.bi, tb.bk, tb.bj, config.repeticiones);
     }
 
 
     for (int r = 0; r < config.repeticiones; r++) {
         matriz_poner_cero(C, N, P);
         double t0 = ahora_segundos();
-        multiplicar_ikj_bloqueada(A, B, C, N, M, P);
+        multiplicar_ikj_bloqueada(A, B, C, N, M, P, tb);
         double t1 = ahora_segundos();
         double transcurrido = t1 - t0;
         double gflops = flops / transcurrido / 1e9;

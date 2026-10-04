@@ -4,7 +4,7 @@
  * C = A * B (A: N x M, B: M x P, C: N x P) con distribucion 1D por
  * filas: se reparten filas de A entre procesos, B se replica entera
  * (Bcast), C se recolecta en el rank 0 (Gatherv). Kernel local ikj
- * bloqueado (cache blocking/tiling con BI/BK/BJ de config.h, ver
+ * bloqueado (cache blocking/tiling con bloques de bloque.h, ver
  * matmul_ikj_bloqueado.c en src/serial/).
  *
  * N, M, P son constantes de compilacion (config.h), igual que la
@@ -22,6 +22,7 @@
 #include <stdio.h>
 
 #include "../common/cli.h"
+#include "../common/bloque.h"
 #include "../common/config.h"
 #include "../common/matrix.h"
 #include "../common/particiones.h"
@@ -49,13 +50,15 @@ static int min_int(int a, int b) {
 static void multiplicar_ikj_bloqueada(const real_t *restrict a,
                                        const real_t *restrict b,
                                        real_t *restrict c,
-                                       int n, int m, int p) {
-    for (int ii = 0; ii < n; ii += BI) {
-        int i_fin = min_int(ii + BI, n);
-        for (int jj = 0; jj < p; jj += BJ) {
-            int j_fin = min_int(jj + BJ, p);
-            for (int kk = 0; kk < m; kk += BK) {
-                int k_fin = min_int(kk + BK, m);
+                                       int n, int m, int p,
+                                       TamanioBloque tb) {
+    const int bi = tb.bi, bk = tb.bk, bj = tb.bj;
+    for (int ii = 0; ii < n; ii += bi) {
+        int i_fin = min_int(ii + bi, n);
+        for (int jj = 0; jj < p; jj += bj) {
+            int j_fin = min_int(jj + bj, p);
+            for (int kk = 0; kk < m; kk += bk) {
+                int k_fin = min_int(kk + bk, m);
 
                 for (int i = ii; i < i_fin; i++) {
                     real_t *restrict fila_c = c + (size_t)i * p;
@@ -89,6 +92,7 @@ int main(int argc, char *argv[]) {
 
     char info_tamanio[64];
     snprintf(info_tamanio, sizeof(info_tamanio), "N=%d M=%d P=%d", N, M, P);
+    const TamanioBloque tb = bloque_calcular();
 
     /* mpirun propaga el mismo argv a todos los ranks, asi que todos
      * parsean igual (sin Bcast de config). Con argumentos invalidos,
@@ -164,7 +168,7 @@ int main(int argc, char *argv[]) {
         MPI_Scatterv(A, sendcounts, displs, MPI_DOUBLE,
                      local_A, mis_elementos_A, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-        multiplicar_ikj_bloqueada(local_A, B, local_C, (int)mis_filas, M, P);
+        multiplicar_ikj_bloqueada(local_A, B, local_C, (int)mis_filas, M, P, tb);
 
         MPI_Gatherv(local_C, mis_elementos_C, MPI_DOUBLE,
                     C, recvcounts_C, displs_C, MPI_DOUBLE, 0, MPI_COMM_WORLD);

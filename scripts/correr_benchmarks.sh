@@ -125,8 +125,16 @@ src_de() { case $1 in
 esac; }
 compilar() { # alg n
   local exe=$BIN/${1}_$2
-  [ -x "$exe" ] && return 0
   local cmd; cmd=$(src_de "$1")
+  # Reutiliza el binario solo si es mas nuevo que sus fuentes y headers (uno
+  # viejo puede imprimir otro formato de csv y quedar descartado en silencio).
+  if [ -x "$exe" ]; then
+    local viejo=0 f
+    for f in $(echo "$cmd" | tr ' ' '\n' | grep '[.]c$') src/common/*.h; do
+      [ "$f" -nt "$exe" ] && viejo=1
+    done
+    [ $viejo = 0 ] && return 0
+  fi
   # El compilador va primero; los flags y -D antes de las fuentes no importan
   # salvo las librerias (-l), que deben ir al final: se arma explicitamente.
   local comp=${cmd%% *} resto=${cmd#* } libs="" fuentes=""
@@ -226,7 +234,19 @@ for alg in $ALGS; do
         'BEGIN{printf "%d", r*2*n^3/(g*1e9*(p^0.85))}')
       TOTAL_S=$((TOTAL_S + est)); NCONF=$((NCONF+1))
       key="${alg}_${n}_${p}"
-      if grep -qx "$key" "$HECHOS"; then continue; fi
+      # Hecho = esta en hechos.txt Y (tiene filas en crudo.csv O termino mal,
+      # timeout/oom, que no deja filas). Si hechos.txt dice ok pero crudo.csv
+      # no tiene datos (p.ej. se borro/reemplazo el csv), se vuelve a correr.
+      if grep -qx "$key" "$HECHOS"; then
+        if awk -F, -v a="$alg" -v n="$n" -v p="$p" '$2==n && $3==p && $4==a {f=1; exit} END{exit !f}' "$CSV"; then
+          continue
+        fi
+        if [ -f "$OUT/estado.csv" ] && awk -F, -v a="$alg" -v n="$n" -v p="$p" \
+             '$2==n && $3==p && $4==a {e=$6} END{exit !(e!="" && e!="ok")}' "$OUT/estado.csv"; then
+          continue
+        fi
+        echo "[reintento] $key figura como hecho pero no tiene datos en $CSV"
+      fi
       [ "$DRY" = 1 ] && { echo "  $key reps=$reps ~${est}s mem~$((mem/1048576))MB$excede"; continue; }
 
       if ! compilar "$alg" "$n"; then
@@ -263,10 +283,15 @@ for alg in $ALGS; do
         case $estado in oom_kill|timeout) echo "$key" >> "$HECHOS";; esac
       else
         # Normaliza: serial = n,m,p,alg,rep,seg,gf,gen ; mpi = n,m,p,procs,alg,rep,seg,gf,gen
-        awk -F, -v perfil="$PERFIL" -v alg="$alg" -v p="$p" 'NR>1 && NF>=8 {
+        filas=$(awk -F, -v perfil="$PERFIL" -v alg="$alg" -v p="$p" 'NR>1 && NF>=8 {
           if (NF==8) printf "%s,%s,%s,%s,%s,%s,%s,%s\n", perfil,$1,1,alg,$5,$6,$7,$8
-          else       printf "%s,%s,%s,%s,%s,%s,%s,%s\n", perfil,$1,$4,alg,$6,$7,$8,$9 }' "$tmp" >> "$CSV"
-        echo "$key" >> "$HECHOS"
+          else       printf "%s,%s,%s,%s,%s,%s,%s,%s\n", perfil,$1,$4,alg,$6,$7,$8,$9 }' "$tmp" | tee -a "$CSV" | wc -l)
+        if [ "$filas" -gt 0 ]; then
+          echo "$key" >> "$HECHOS"
+        else
+          echo "  [FALLO] $key: la salida no tiene filas validas (binario viejo?), ver $FALLOS"
+          echo "$key sin_filas $(head -c 200 "$tmp" | tr '\n' ' ')" >> "$FALLOS"
+        fi
       fi
       rm -f "$tmp" "$tmp.err"
     done

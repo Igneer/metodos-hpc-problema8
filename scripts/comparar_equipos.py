@@ -3,7 +3,7 @@
 
 Uso:
   python scripts/comparar_equipos.py
-  python scripts/comparar_equipos.py --n 10000 --salida informe/img/equipos_i5_vs_epyc.png
+  python scripts/comparar_equipos.py --n 10000 --salida img/equipos_i5_vs_epyc.png
 
 Lee los metricas.csv de cada equipo (medianas). Eficiencia relativa al propio p = 1.
 """
@@ -24,7 +24,7 @@ def main():
     ap.add_argument("--i5", default="resultados/server_i5_7400_en_ram/metricas.csv")
     ap.add_argument("--epyc", default="resultados/servidor/metricas.csv")
     ap.add_argument("--n", type=int, default=10000)
-    ap.add_argument("--salida", default="informe/img/equipos_i5_vs_epyc.png")
+    ap.add_argument("--salida", default="img/equipos_i5_vs_epyc.png")
     a = ap.parse_args()
 
     eq = [("i5-7400 (4 cores)", pd.read_csv(a.i5), "-", "o"), ("EPYC (48 cores)", pd.read_csv(a.epyc), "--", "s")]

@@ -4,7 +4,7 @@
 Uso:
   python scripts/comparar_bloques.py
   python scripts/comparar_bloques.py --b64 resultados/servidor/crudo.csv \
-      --b160 resultados/servidor/crudo_mayor_bloque.csv --salida informe/img/bloque_64_vs_160.png
+      --b160 resultados/servidor/crudo_mayor_bloque.csv --salida img/bloque_64_vs_160.png
 
 Todo sobre la mediana de las repeticiones. S_abs = speedup contra el serial bloqueado
 del mismo b. Solo se comparan los p presentes en ambas corridas.
@@ -33,7 +33,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--b64", default="resultados/servidor/crudo.csv")
     ap.add_argument("--b160", default="resultados/servidor/crudo_mayor_bloque.csv")
-    ap.add_argument("--salida", default="informe/img/bloque_64_vs_160.png")
+    ap.add_argument("--salida", default="img/bloque_64_vs_160.png")
     ap.add_argument("--p", type=int, default=48, help="p de los paneles paralelos")
     a = ap.parse_args()
 

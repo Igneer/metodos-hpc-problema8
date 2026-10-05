@@ -53,8 +53,9 @@ src/mpi/        versiones MPI con partición 1D: ijk, ikj, ikj bloqueado
 src/ref/        referencia 2D con ScaLAPACK (PDGEMM)
 src/common/     utilidades (matrices, partición, bloques, línea de comandos)
 scripts/        benchmarks, cálculo de métricas y gráficos
-resultados/     datos crudos (crudo.csv), métricas (metricas.csv) y gráficas
-informe/        este informe (README.md) y sus imágenes (informe/img)
+resultados/     datos crudos (crudo.csv) y métricas (metricas.csv) de cada corrida
+README.md       este informe
+img/            imágenes del informe
 ```
 
 Los gráficos de este informe se regeneran con `python scripts/graficos_informe.py` (desde la raíz del repositorio) a partir de los CSV de `resultados/`.
@@ -1211,10 +1212,3 @@ Es la infraestructura típica en los clústeres corporativos que entrenan modelo
 - MPI Forum. *MPI: A Message-Passing Interface Standard.* <https://www.mpi-forum.org/>
 - Open MPI, páginas de manual de funciones MPI: <https://docs.open-mpi.org/en/main/man-openmpi/man3/index.html> (en particular `MPI_Bcast` y `MPI_Type_create_subarray`).
 - Gropp, W., Lusk, E., y Skjellum, A. *Using MPI: Portable Parallel Programming with the Message-Passing Interface.* MIT Press.
-
-### Material de trabajo del proyecto
-
-- *Guía de trabajo — Proyecto 8: Multiplicación de matrices en paralelo* (`guia_proyecto8_matrices.md`).
-- *Documentación de ScaLAPACK en `src/ref/matmul_pdgemm.c`* (`documentacion_scalapack_pdgemm.md`).
-- *Distribución 2D, SUMMA y OpenBLAS: explicación y ejemplos* y *Plan de implementación de SUMMA 2D* (`explicación y ejemplos.md`, `plan_summa_2d.md`, `seguimiento_summa_2d.md`).
-- Documentos de trabajo del equipo sobre OpenBLAS y sobre la multiplicación distribuida 2D.

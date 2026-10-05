@@ -3,3 +3,4 @@ bin/
 *.exe
 .atl/
 .vscode/
+resultados/**/graficas/

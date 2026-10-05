@@ -1,9 +1,0 @@
-Perfil=server_i5_7400 cores=4 RAM=12GB limite_teorico=12GB
-N: 500 1000 1500 2000 3000 4000 5000 7500 10000
-P: 1 2 4
-Salida: resultados/server_i5_7400_normal/crudo.csv
-[01:37:50] serial_ikj_500_1 reps=10 (est ~0s)
-[01:37:50] serial_ikj_1000_1 reps=10 (est ~3s)
-[01:37:53] serial_ikj_1500_1 reps=10 (est ~11s)
-[01:38:04] serial_ikj_2000_1 reps=10 (est ~26s)
-[01:38:32] serial_ikj_3000_1 reps=5 (est ~45s)

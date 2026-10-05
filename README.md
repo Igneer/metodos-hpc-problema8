@@ -87,19 +87,19 @@ Un ejemplo pequeño fija la idea. Con las matrices de $4 \times 4$ que se usará
 $$
 A = \begin{pmatrix} 1 & 2 & 3 & 4 \cr 5 & 6 & 7 & 8 \cr 9 & 10 & 11 & 12 \cr 13 & 14 & 15 & 16 \end{pmatrix},
 \qquad
-B = \begin{pmatrix} 1 & 0 & 2 & 0 \cr 0 & 1 & 0 & 2 \cr 3 & 0 & 4 & 0 \cr 0 & 3 & 0 & 4 \end{pmatrix},
+B = \begin{pmatrix} 1 & 2 & 3 & 1 \cr 3 & 1 & 2 & 3 \cr 2 & 1 & 1 & 2 \cr 1 & 3 & 2 & 1 \end{pmatrix},
 $$
 
 el elemento $C_{00}$ es la fila 0 de $A$ por la columna 0 de $B$:
 
 $$
-C_{00} = 1\cdot 1 + 2 \cdot 0 + 3 \cdot 3 + 4 \cdot 0 = 10,
+C_{00} = 1 \cdot 1 + 2 \cdot 3 + 3 \cdot 2 + 4 \cdot 1 = 17,
 $$
 
 y el producto completo es
 
 $$
-C = A B = \begin{pmatrix} 10 & 14 & 14 & 20 \cr 26 & 30 & 38 & 44 \cr 42 & 46 & 62 & 68 \cr 58 & 62 & 86 & 92 \end{pmatrix}.
+C = A B = \begin{pmatrix} 17 & 19 & 18 & 17 \cr 45 & 47 & 50 & 45 \cr 73 & 75 & 82 & 73 \cr 101 & 103 & 114 & 101 \end{pmatrix}.
 $$
 
 Estas mismas matrices se reutilizan en los capítulos 2 (blocking) y 5 (SUMMA), de modo que el lector puede comprobar que todas las estrategias llegan al mismo resultado.
@@ -236,10 +236,10 @@ $$
 con
 
 $$
-A_{00}=\begin{pmatrix}1&2\cr5&6\end{pmatrix},\;
-A_{01}=\begin{pmatrix}3&4\cr7&8\end{pmatrix},\;
-B_{00}=\begin{pmatrix}1&0\cr0&1\end{pmatrix},\;
-B_{10}=\begin{pmatrix}3&0\cr0&3\end{pmatrix}.
+A_{00}=\begin{pmatrix}1&2 \cr 5&6\end{pmatrix},\;
+A_{01}=\begin{pmatrix}3&4 \cr 7&8\end{pmatrix},\;
+B_{00}=\begin{pmatrix}1&2 \cr 3&1\end{pmatrix},\;
+B_{10}=\begin{pmatrix}2&1 \cr 1&3\end{pmatrix}.
 $$
 
 El producto por bloques sigue la misma regla que el producto de matrices de $2\times 2$, pero con bloques en lugar de números:
@@ -258,15 +258,15 @@ Para el bloque $C_{00}$ el algoritmo hace dos pasos (`kk = 0` y `kk = 2`), mante
 Con los valores numéricos, el paso 0 deja en $C_{00}$
 
 $$
-C_{00} = A_{00} B_{00} = \begin{pmatrix}1&2\cr5&6\end{pmatrix}
+C_{00} = A_{00} B_{00} = \begin{pmatrix}7&4 \cr 23&16\end{pmatrix}
 $$
 
 y el paso 1 suma
 
 $$
-A_{01} B_{10} = \begin{pmatrix}9&12\cr21&24\end{pmatrix}
+A_{01} B_{10} = \begin{pmatrix}10&15 \cr 22&31\end{pmatrix}
 \quad\Longrightarrow\quad
-C_{00} = \begin{pmatrix}10&14\cr26&30\end{pmatrix}.
+C_{00} = \begin{pmatrix}17&19 \cr 45&47\end{pmatrix}.
 $$
 
 El resultado, $C_{00}$, coincide con la esquina superior izquierda de $C$ calculada en el capítulo 1. Repetido para los cuatro bloques de $C$ son $(n/b)^3 = 8$ productos de bloques, cada uno trabajando únicamente sobre $3 \times 4 = 12$ números, que es lo que debe caber en caché en cada momento.
@@ -636,17 +636,17 @@ Se emplean las mismas matrices de $4 \times 4$ de los capítulos anteriores y un
 Los valores de las losetas son
 
 $$
-A_{00}=\begin{pmatrix}1&2\cr5&6\end{pmatrix},\quad
-A_{01}=\begin{pmatrix}3&4\cr7&8\end{pmatrix},\quad
-A_{10}=\begin{pmatrix}9&10\cr13&14\end{pmatrix},\quad
-A_{11}=\begin{pmatrix}11&12\cr15&16\end{pmatrix},
+A_{00}=\begin{pmatrix}1&2 \cr 5&6\end{pmatrix},\quad
+A_{01}=\begin{pmatrix}3&4 \cr 7&8\end{pmatrix},\quad
+A_{10}=\begin{pmatrix}9&10 \cr 13&14\end{pmatrix},\quad
+A_{11}=\begin{pmatrix}11&12 \cr 15&16\end{pmatrix},
 $$
 
 $$
-B_{00}=\begin{pmatrix}1&0\cr0&1\end{pmatrix},\quad
-B_{01}=\begin{pmatrix}2&0\cr0&2\end{pmatrix},\quad
-B_{10}=\begin{pmatrix}3&0\cr0&3\end{pmatrix},\quad
-B_{11}=\begin{pmatrix}4&0\cr0&4\end{pmatrix}.
+B_{00}=\begin{pmatrix}1&2 \cr 3&1\end{pmatrix},\quad
+B_{01}=\begin{pmatrix}3&1 \cr 2&3\end{pmatrix},\quad
+B_{10}=\begin{pmatrix}2&1 \cr 1&3\end{pmatrix},\quad
+B_{11}=\begin{pmatrix}1&2 \cr 2&1\end{pmatrix}.
 $$
 
 Tener esas losetas no basta. Por ejemplo, P(0,0) debe calcular
@@ -673,10 +673,10 @@ pero solo dispone de $A_{00}$ y $B_{00}$: le faltan $A_{01}$ (que está en su ve
 Acumulado después de la etapa 1:
 
 $$
-C_{00}=\begin{pmatrix}1&2\cr5&6\end{pmatrix},\quad
-C_{01}=\begin{pmatrix}2&4\cr10&12\end{pmatrix},\quad
-C_{10}=\begin{pmatrix}9&10\cr13&14\end{pmatrix},\quad
-C_{11}=\begin{pmatrix}18&20\cr26&28\end{pmatrix}.
+C_{00}=\begin{pmatrix}7&4 \cr 23&16\end{pmatrix},\quad
+C_{01}=\begin{pmatrix}7&7 \cr 27&23\end{pmatrix},\quad
+C_{10}=\begin{pmatrix}39&28 \cr 55&40\end{pmatrix},\quad
+C_{11}=\begin{pmatrix}47&39 \cr 67&55\end{pmatrix}.
 $$
 
 **Etapa 2 (franja $k = 1$).** Cambian los propietarios que difunden:
@@ -695,25 +695,25 @@ $$
 Aporte de la etapa 2 a cada acumulador:
 
 $$
-A_{01}B_{10}=\begin{pmatrix}9&12\cr21&24\end{pmatrix},\quad
-A_{01}B_{11}=\begin{pmatrix}12&16\cr28&32\end{pmatrix},\quad
-A_{11}B_{10}=\begin{pmatrix}33&36\cr45&48\end{pmatrix},\quad
-A_{11}B_{11}=\begin{pmatrix}44&48\cr60&64\end{pmatrix}.
+A_{01}B_{10}=\begin{pmatrix}10&15 \cr 22&31\end{pmatrix},\quad
+A_{01}B_{11}=\begin{pmatrix}11&10 \cr 23&22\end{pmatrix},\quad
+A_{11}B_{10}=\begin{pmatrix}34&47 \cr 46&63\end{pmatrix},\quad
+A_{11}B_{11}=\begin{pmatrix}35&34 \cr 47&46\end{pmatrix}.
 $$
 
 Resultado final de cada proceso:
 
 $$
-C_{00}=\begin{pmatrix}10&14\cr26&30\end{pmatrix},\quad
-C_{01}=\begin{pmatrix}14&20\cr38&44\end{pmatrix},\quad
-C_{10}=\begin{pmatrix}42&46\cr58&62\end{pmatrix},\quad
-C_{11}=\begin{pmatrix}62&68\cr86&92\end{pmatrix}.
+C_{00}=\begin{pmatrix}17&19 \cr 45&47\end{pmatrix},\quad
+C_{01}=\begin{pmatrix}18&17 \cr 50&45\end{pmatrix},\quad
+C_{10}=\begin{pmatrix}73&75 \cr 101&103\end{pmatrix},\quad
+C_{11}=\begin{pmatrix}82&73 \cr 114&101\end{pmatrix}.
 $$
 
 **Resultado.** Al reunir las cuatro losetas se obtiene
 
 $$
-C = \begin{pmatrix} 10 & 14 & 14 & 20 \cr 26 & 30 & 38 & 44 \cr 42 & 46 & 62 & 68 \cr 58 & 62 & 86 & 92 \end{pmatrix},
+C = \begin{pmatrix} 17 & 19 & 18 & 17 \cr 45 & 47 & 50 & 45 \cr 73 & 75 & 82 & 73 \cr 101 & 103 & 114 & 101 \end{pmatrix},
 $$
 
 idéntica a la calculada en el capítulo 1. Cada proceso terminó su propia loseta sin necesidad de sumar bloques de procesos distintos: los $C_{ij}$ ocupan regiones diferentes de la matriz final, no contribuciones superpuestas.

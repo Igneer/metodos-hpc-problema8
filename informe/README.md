@@ -34,15 +34,16 @@ El análisis de resultados, realizado en un equipo de 48 cores y 192 GB de RAM, 
 
 ## Entornos de medición
 
-| | Serial (capítulo 2) | Paralelo (capítulos 4 a 7) |
-|---|---|---|
-| Cores | 16 | 48 |
-| RAM | 24 GB | 192 GB |
-| Compilador y opciones | — | `gcc 15.2.0`, `-std=gnu11 -O3 -march=native -mcmodel=medium` |
-| Repeticiones por punto | 10 | 10 si $n \le 2000$, 5 si $n > 2000$ |
-| Estadístico | mediana (y desvío) | mediana (y desviación absoluta mediana) |
+| | Serial (capítulo 2) | Paralelo (capítulos 4 a 7) | Replicación (secciones 7.10 y 7.11) |
+|---|---|---|---|
+| Procesador | — | AMD EPYC 7B12 | Intel Core i5-7400 @ 3,0 GHz (sin SMT) |
+| Cores | 16 | 48 | 4 |
+| RAM | 24 GB | 192 GB | 12 GB |
+| Compilador y opciones | — | `gcc 15.2.0`, `-std=gnu11 -O3 -march=native -mcmodel=medium` | `gcc 11.4.0`, mismas opciones |
+| Repeticiones por punto | 10 | 10 si $n \le 2000$, 5 si $n > 2000$ | igual; 5 con $n = 15\,000$ |
+| Estadístico | mediana (y desvío) | mediana (y desviación absoluta mediana) | igual |
 
-Los tamaños barridos en el equipo de 48 cores fueron $n \in \{500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000\}$ y $p \in \{1, 2, 4, 6, 8, 12, 16, 24, 32, 48\}$. En todos los casos las matrices son cuadradas, de doble precisión (8 bytes por elemento) y generadas con semilla fija.
+Los tamaños barridos en el equipo de 48 cores fueron $n \in \{500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000\}$ y $p \in \{1, 2, 4, 6, 8, 12, 16, 24, 32, 48\}$. En el i5-7400 se barrieron los mismos $n$ con $p \in \{1, 2, 4\}$ y, aparte, $n = 15\,000$. En todos los casos las matrices son cuadradas, de doble precisión (8 bytes por elemento) y generadas con semilla fija.
 
 ## Organización del repositorio
 
@@ -942,9 +943,9 @@ Visto en términos de speedup absoluto contra el mejor serial, con 48 procesos y
 
 ### 7.7 Limitaciones del estudio
 
-- **Un único equipo.** Los procesos MPI se comunican por memoria compartida, no por una red. El costo de comunicación real de un clúster es mayor, de modo que los resultados son optimistas para la partición 1D.
+- **Un nodo por equipo.** Se midió en dos equipos (48 y 4 cores), pero en ambos los procesos MPI se comunican por memoria compartida, no por una red. El costo de comunicación real de un clúster es mayor, de modo que los resultados son optimistas para la partición 1D.
 - **No se cronometraron las fases por separado** en las versiones 1D (comunicación frente a cómputo). El sobrecosto se infiere como $T(p) - T(1)/p$ y mezcla comunicación, contención de memoria y desequilibrio. Cronometrar cada fase con `MPI_Wtime` es la mejora de método más directa.
-- **Dos entornos.** La comparación serial del capítulo 2 se hizo en 16 cores y 24 GB; el análisis paralelo en 48 cores y 192 GB. El speedup absoluto se calcula con una versión serial medida en el mismo equipo paralelo, para que sea consistente.
+- **Tres entornos.** La comparación serial del capítulo 2 se hizo en 16 cores y 24 GB; el análisis paralelo en 48 cores y 192 GB; la replicación en 4 cores y 12 GB (sección 7.10), que solo cubre $p \le 4$. El speedup absoluto se calcula con una versión serial medida en el mismo equipo paralelo, para que sea consistente.
 - **Pocas repeticiones para $n$ grande** (5), por el costo de cada corrida; se usa la mediana y se informa la dispersión, pero los intervalos son amplios.
 - **Tamaños hasta $n = 10\,000$** y precisión doble; frecuencia del procesador y afinidad de procesos no se controlaron explícitamente.
 - Las explicaciones basadas en saturación de memoria son hipótesis coherentes con los datos, no resultados medidos.
@@ -958,7 +959,8 @@ Visto en términos de speedup absoluto contra el mejor serial, con 48 procesos y
 | ¿Dónde se degrada la eficiencia? | Con $n = 10\,000$ cae por debajo de 0,85 desde $p \approx 16$ y llega a 0,48 con $p = 48$; con $n = 1000$ ya es 0,49 con $p = 16$. |
 | ¿Por qué? | Costo de comunicación y de contención de memoria que no disminuye con $p$ (ley de Amdahl; Karp-Flatt no constante), más la generación serial de las matrices. |
 | ¿Qué efecto tiene $n$? | A mayor $n$, mejor relación cómputo/comunicación y mejor eficiencia ($E$ de 0,37 a 0,85 con $p = 16$ entre $n = 500$ y $n = 10\,000$). |
-| ¿1D o 2D? | En un nodo con mucha memoria, la 1D bloqueada iguala a `PDGEMM` en tiempo absoluto para $n \ge 7500$; la ventaja de la 2D es estructural (memoria y comunicación por proceso) y se hace relevante a mayor escala. |
+| ¿1D o 2D? | En un nodo con mucha memoria, la 1D bloqueada iguala a `PDGEMM` en tiempo absoluto para $n \ge 7500$; la ventaja de la 2D es estructural (memoria y comunicación por proceso) y se hace relevante a mayor escala. En el i5-7400 (12 GB) la 1D con $n = 15\,000$ y $p = 4$ agotó la memoria (sección 7.11). |
+| ¿Se repiten las conclusiones en otro equipo? | Sí, en lo cualitativo: el kernel serial rinde igual (13,5 frente a 13,9 GFLOPS), `ikj` sin blocking no escala y el blocking 1D mantiene $E \ge 0{,}90$ con $p = 4$ (sección 7.10). |
 
 ### 7.9 Efecto de un bloque mayor: $b = 160$ frente a $b = 64$
 
@@ -1018,6 +1020,66 @@ Lo que muestran los datos:
 - **Con $p = 1$ la versión MPI ya no iguala al serial.** Con $b = 64$ el cociente serial/MPI($p=1$) vale entre 0,98 y 1,03 (son prácticamente el mismo código). Con $b = 160$ vale entre 0,79 y 0,91: el serial rinde 17–20 GFLOPS y la versión MPI con un proceso, 14,4–16,2. Es decir, el bloque mayor beneficia más al serial que a la versión MPI con un proceso, y esto explica parte de la caída de $S_{abs}$. No se identificó la causa.
 
 En resumen: con un bloque mayor el programa es más rápido en términos absolutos (hasta 433 GFLOPS frente a 338), pero el speedup contra su mejor serial no aumenta, porque la base serial mejora tanto o más. Las conclusiones de la sección 7.8 se mantienen.
+
+
+### 7.10 Replicación en un segundo equipo (i5-7400)
+
+Para comprobar que las conclusiones no dependen del equipo de 48 cores, el barrido se repitió en un servidor distinto: un Intel Core i5-7400 con 4 cores, 12 GB de RAM y 6 MB de L3 (ver «Entornos de medición»). Se usaron los mismos $n$ (500 a 10 000), las mismas tres versiones paralelas, $b = 64$ y las mismas repeticiones, pero solo $p \in \{1, 2, 4\}$, que es lo que permite el equipo. Los datos están en `resultados/server_i5_7400_en_ram/` y la figura se genera con `scripts/comparar_equipos.py`. La corrida terminó sin fallos.
+
+**Tabla 7.6.** Resultados en el i5-7400 para $n = 10\,000$ ($S$ y $E$ relativos al propio $p = 1$):
+
+| $p$ | `ikj` 1D: $T$ (s) | $S$ | $E$ | `ikj` blocking 1D: $T$ (s) | $S$ | $E$ | PDGEMM 2D: $T$ (s) | $S$ | $E$ |
+|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| 1 | 349,5 | 1,00 | 1,00 | 158,8 | 1,00 | 1,00 | 41,50 | 1,00 | 1,00 |
+| 2 | 276,4 | 1,26 | 0,63 | 82,55 | 1,92 | 0,96 | 31,13 | 1,33 | 0,66 |
+| 4 | 252,3 | 1,38 | 0,34 | 43,98 | 3,61 | 0,90 | 27,16 | 1,52 | 0,38 |
+
+![Comparación entre el i5-7400 y el EPYC](img/equipos_i5_vs_epyc.png)
+
+*Figura 7.7. Rendimiento (izquierda) y eficiencia (derecha) para $n = 10\,000$ y $p \le 4$, en el i5-7400 (línea continua) y en el EPYC (línea de trazos).*
+
+**Tabla 7.7.** Comparación de los dos equipos con $n = 10\,000$:
+
+| Versión | $p$ | GFLOPS i5-7400 | GFLOPS EPYC | $E$ i5-7400 | $E$ EPYC |
+|---|--:|--:|--:|--:|--:|
+| serial blocking | 1 | 13,5 | 13,9 | — | — |
+| `ikj` 1D | 4 | 7,9 | 9,3 | 0,34 | 0,39 |
+| `ikj` blocking 1D | 4 | 45,5 | 54,1 | 0,90 | 0,95 |
+| PDGEMM 2D | 4 | 73,6 | 130,7 | 0,38 | 0,68 |
+
+Lo que muestran los datos:
+
+- **El kernel serial rinde casi igual en los dos equipos.** El `ikj` bloqueado con un proceso hace 13,5 GFLOPS en el i5 y 13,9 en el EPYC; el `ikj` sin blocking, 5,8 y 6,2. Con procesadores y cachés distintos, esto es compatible con la idea del capítulo 2: el rendimiento de estas versiones lo fija el patrón de acceso a memoria más que el procesador. *(Interpretación; no se midieron contadores de hardware.)*
+- **`ikj` sin blocking vuelve a no escalar**: con $n = 10\,000$ el speedup es 1,26 con $p = 2$ y 1,38 con $p = 4$ (1,53 y 1,55 en el EPYC).
+- **El blocking 1D escala bien en 4 cores**: $E = 0{,}96$ con $p = 2$ y 0,90 con $p = 4$, y $S_{abs} = 3{,}36$ contra el mejor serial. Es algo menor que en el EPYC (0,95 con $p = 4$). La fracción serial de Karp-Flatt es 0,036 con $n = 10\,000$, del mismo orden que en el EPYC.
+- **`PDGEMM` es lo que más cambia.** Con $n = 10\,000$ y $p = 4$ llega a 73,6 GFLOPS en el i5 y a 130,7 en el EPYC; su eficiencia relativa es 0,38 contra 0,68, aunque con $p = 1$ ambos equipos dan el mismo tiempo (41,5 s). Por eso `PDGEMM` es 1,6 veces más rápido que el blocking 1D en el i5 y 2,4 veces en el EPYC con $p = 4$. No se estudió la causa; podría ser la memoria compartida del equipo o la grilla de procesos, pero no se verificó.
+- **La generación serial pesa más.** Con $p = 4$, la fracción de la corrida ocupada por la generación pasa de 61 % ($n = 500$) a 8 % ($n = 10\,000$), y el speedup del blocking 1D contando la generación es 3,17 con $n = 10\,000$.
+- **El sobrecosto normalizado crece con $n$.** El sobrecosto paralelo dividido por $n^2$ del blocking 1D con $p = 4$ pasa de 7,3 ns ($n = 500$) a 42,9 ns ($n = 10\,000$): no es el comportamiento plano de un costo de comunicación $O(n^2)$ y es compatible con contención de memoria. *(Hipótesis; no se midió.)*
+
+En resumen, las conclusiones cualitativas de la sección 7.8 se repiten en un equipo distinto: el kernel local es lo que más importa, el blocking escala y `ikj` sin blocking no. Lo que cambia es la brecha con `PDGEMM`, que en el equipo de 4 cores es menor.
+
+### 7.11 El límite de memoria de la partición 1D ($n = 15\,000$)
+
+En las versiones 1D cada proceso mantiene una copia completa de $B$, de modo que la memoria total crece con $p$. En el EPYC (192 GB) esto no limita; en el i5-7400 (12 GB) sí. Para observarlo se midió $n = 15\,000$ (1,8 GB por matriz) con $p \in \{1, 2, 4\}$ y 5 repeticiones. Los datos están en `resultados/server_i5_7400_cruce_ram/`. «RAM estimada» es la estimación que hace el script de benchmark antes de lanzar la corrida, como fracción de los 12 GB; el máximo residente es el que midió el sistema.
+
+**Tabla 7.8.** Corridas con $n = 15\,000$:
+
+| Versión | $p$ | RAM estimada / 12 GB | Estado | $T$ mediana (s) | GFLOPS | Máx. residente (GB) |
+|---|--:|--:|---|--:|--:|--:|
+| `ikj` serial | 1 | 0,42 | ok | 1311,9 | 5,15 | 5,3 |
+| `ikj` blocking serial | 1 | 0,42 | ok | 530,8 | 12,72 | 5,3 |
+| `ikj` 1D | 1 | 0,70 | ok | 1321,0 | 5,11 | 8,8 |
+| `ikj` 1D | 2 | 0,84 | ok | 937,1 | 7,20 | 7,0 |
+| `ikj` 1D | 4 | **1,12** | **terminada por falta de memoria (OOM, `rc=137`)** | — | — | — |
+
+Lo que muestran los datos:
+
+- **Con $p = 4$ el sistema termina el proceso** tras 1039 s y 3857 fallos mayores de página (con $p = 1$ y $p = 2$ fueron 7). Los fallos mayores indican que el sistema empezó a paginar a disco antes de matar el proceso. Es la confirmación empírica del límite descrito en 7.6: con la partición 1D la memoria total necesaria supera la RAM del nodo antes de que se agoten los cores.
+- **Lo que sí terminó escala poco.** `ikj` 1D con $p = 2$ tarda 937 s contra 1321 s con $p = 1$ (speedup 1,41, $E = 0{,}70$). Contra el mejor serial (blocking, 531 s) es más lento: $S_{abs} = 0{,}57$.
+- **El kernel serial mantiene su rendimiento al crecer $n$:** 12,7 GFLOPS con blocking y 5,15 sin él, frente a 13,5 y 5,8 con $n = 10\,000$.
+- **Faltan datos.** La corrida de `ikj` blocking 1D con $n = 15\,000$ figura iniciada en `benchmark_cruce_ram.log` pero no tiene filas en `crudo.csv`, por lo que no se la analiza; tampoco se midió `PDGEMM` con este $n$.
+
+Este resultado es el argumento empírico más concreto a favor de la partición 2D del capítulo 5: en SUMMA cada proceso guarda solo bloques de $A$, $B$ y $C$ y la memoria por proceso baja con $p$ en lugar de mantenerse. Esa ventaja no pudo comprobarse aquí por no haberse medido `PDGEMM` con $n = 15\,000$; queda como trabajo pendiente.
 
 
 ---

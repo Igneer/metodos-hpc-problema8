@@ -1,0 +1,15 @@
+fecha: 2026-10-05T01:44:57+00:00
+host: hpc-server
+cores: 4 ram_gb: 12
+Model name:                              Intel(R) Core(TM) i5-7400 CPU @ 3.00GHz
+Thread(s) per core:                      1
+Core(s) per socket:                      4
+Socket(s):                               1
+CPU max MHz:                             3500.0000
+CPU min MHz:                             800.0000
+L1d cache:                               128 KiB (4 instances)
+L2 cache:                                1 MiB (4 instances)
+L3 cache:                                6 MiB (1 instance)
+gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+mpirun (Open MPI) 4.1.2
+flags: -std=gnu11 -O3 -march=native -mcmodel=medium

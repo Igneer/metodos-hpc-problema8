@@ -1,0 +1,5 @@
+algoritmo,n,procesos,reps,mediana_s,mad_s,mad_rel,min_s,max_s,repeticiones_atipicas,gflops,generacion_s,fraccion_generacion,razon_generacion_ejecucion,serial_mejor_s,serial_propio_s,speedup_p1,eficiencia_p1,speedup_serial_propio,eficiencia_serial_propio,speedup_mejor_serial,eficiencia_mejor_serial,fraccion_serial_karp_flatt,sobrecosto_paralelo_s,sobrecosto_por_n2_ns,speedup_con_generacion_mejor_serial,tiempo_relativo_pdgemm
+mpi_ikj,15000,1,5,1321.01,0.109932,8.32181e-05,1320.9,1322.36,1,5.1097,8.32581,0.00626314,0.00630262,530.83,1311.92,1,1,0.993123,0.993123,0.401837,0.401837,,,,0.405583,
+mpi_ikj,15000,2,5,937.064,0.0410734,4.3832e-05,937.023,938.369,2,7.2034,8.54292,0.00903433,0.00911669,530.83,1311.92,1.40973,0.704865,1.40004,0.700018,0.566482,0.283241,0.418711,276.56,1229.16,0.570398,
+serial_ikj,15000,1,5,1311.92,0.744935,0.000567819,1310.67,1312.67,0,5.1451,8.29639,0.0062841,0.00632384,530.83,,,,,,,,,,,,
+serial_ikj_bloqueado,15000,1,5,530.83,0.00643563,1.21237e-05,530.823,530.879,1,12.7159,8.30964,0.0154128,0.0156541,530.83,,,,,,,,,,,,

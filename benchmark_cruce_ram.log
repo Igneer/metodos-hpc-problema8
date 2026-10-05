@@ -1,0 +1,12 @@
+Perfil=server_i5_7400 cores=4 RAM=12GB limite_teorico=12GB
+N: 15000
+P: 1 2 4
+Salida: resultados/server_i5_7400_cruce_ram/crudo.csv
+[05:52:10] serial_ikj_15000_1 reps=5 (est ~5625s)
+[07:41:38] serial_ikj_bloqueado_15000_1 reps=5 (est ~1350s)
+[08:26:02] mpi_ikj_15000_1 reps=5 (est ~5625s)
+[10:16:19] mpi_ikj_15000_2 reps=5 (est ~3120s)
+[11:34:35] mpi_ikj_15000_4 reps=5 (est ~1731s) [EXCEDE RAM x1.12]
+  -> oom_kill
+  [FALLO rc=137] ver resultados/server_i5_7400_cruce_ram/fallos.txt
+[11:51:55] mpi_ikj_bloqueado_15000_1 reps=5 (est ~1350s)

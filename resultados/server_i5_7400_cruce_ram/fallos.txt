@@ -1,0 +1,1 @@
+mpi_ikj_15000_4 rc=137 oom_kill -------------------------------------------------------------------------- Primary job  terminated normally, but 1 process returned a non-zero exit code. Per user-direction, the job has been aborted. 

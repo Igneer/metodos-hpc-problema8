@@ -1,0 +1,6 @@
+perfil,n,procesos,algoritmo,ratio_ram,estado,pared_s,fallos_menores,fallos_mayores,maxrss_kb
+server_i5_7400,15000,1,serial_ikj,0.42,ok,6568.10,1318432,0,5274988
+server_i5_7400,15000,1,serial_ikj_bloqueado,0.42,ok,2663.87,1318432,0,5274992
+server_i5_7400,15000,1,mpi_ikj,0.70,ok,6616.58,2203280,7,8804488
+server_i5_7400,15000,2,mpi_ikj,0.84,ok,4696.66,2644408,7,7046752
+server_i5_7400,15000,4,mpi_ikj,1.12,oom_kill,1038.89,1229212,3857,4595276

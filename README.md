@@ -250,12 +250,26 @@ $$
 
 Para el bloque $C_{00}$ el algoritmo hace dos pasos (`kk = 0` y `kk = 2`), manteniendo $C_{00}$ en caché:
 
-| Paso | Bloques que se cargan en caché | Operación | Acumulado en $C_{00}$ |
-|---|---|---|---|
-| 0 | $A_{00}$, $B_{00}$, $C_{00}$ (12 números) | $C_{00} \mathrel{+}= A_{00} B_{00} = \begin{pmatrix}1&2\cr5&6\end{pmatrix}$ | $\begin{pmatrix}1&2\cr5&6\end{pmatrix}$ |
-| 1 | $A_{01}$, $B_{10}$ (y $C_{00}$ ya presente) | $C_{00} \mathrel{+}= A_{01} B_{10} = \begin{pmatrix}9&12\cr21&24\end{pmatrix}$ | $\begin{pmatrix}10&14\cr26&30\end{pmatrix}$ |
+| Paso | Bloques que se cargan en caché | Operación |
+|---|---|---|
+| 0 | $A_{00}$, $B_{00}$, $C_{00}$ (12 números) | $C_{00} \mathrel{+}= A_{00} B_{00}$ |
+| 1 | $A_{01}$, $B_{10}$ (y $C_{00}$ ya presente) | $C_{00} \mathrel{+}= A_{01} B_{10}$ |
 
-El resultado, $C_{00} = \begin{pmatrix}10&14\cr26&30\end{pmatrix}$, coincide con la esquina superior izquierda de $C$ calculada en el capítulo 1. Repetido para los cuatro bloques de $C$ son $(n/b)^3 = 8$ productos de bloques, cada uno trabajando únicamente sobre $3 \times 4 = 12$ números, que es lo que debe caber en caché en cada momento.
+Con los valores numéricos, el paso 0 deja en $C_{00}$
+
+$$
+C_{00} = A_{00} B_{00} = \begin{pmatrix}1&2\cr5&6\end{pmatrix}
+$$
+
+y el paso 1 suma
+
+$$
+A_{01} B_{10} = \begin{pmatrix}9&12\cr21&24\end{pmatrix}
+\quad\Longrightarrow\quad
+C_{00} = \begin{pmatrix}10&14\cr26&30\end{pmatrix}.
+$$
+
+El resultado, $C_{00}$, coincide con la esquina superior izquierda de $C$ calculada en el capítulo 1. Repetido para los cuatro bloques de $C$ son $(n/b)^3 = 8$ productos de bloques, cada uno trabajando únicamente sobre $3 \times 4 = 12$ números, que es lo que debe caber en caché en cada momento.
 
 **Por qué reduce el tráfico de memoria.** Con un modelo simplificado en el que un bloque que cabe en caché se carga una sola vez, cada bloque de $B$ se trae $n/b$ veces (una por cada bloque de filas de $A$) en lugar de $n$ veces. En el ejemplo, $B$ se lee 2 veces en lugar de 4; en general, el tráfico de $B$ desde memoria principal se divide por el tamaño del bloque $b$. Cuanto mayor sea $b$, mayor es la reutilización, hasta el límite impuesto por la capacidad de la caché.
 
@@ -614,10 +628,26 @@ Se emplean las mismas matrices de $4 \times 4$ de los capítulos anteriores y un
 
 | Proceso | Posee de $A$ | Posee de $B$ | Debe calcular |
 |---|---|---|---|
-| P(0,0) | $A_{00} = \begin{pmatrix}1&2\cr5&6\end{pmatrix}$ | $B_{00} = \begin{pmatrix}1&0\cr0&1\end{pmatrix}$ | $C_{00}$ |
-| P(0,1) | $A_{01} = \begin{pmatrix}3&4\cr7&8\end{pmatrix}$ | $B_{01} = \begin{pmatrix}2&0\cr0&2\end{pmatrix}$ | $C_{01}$ |
-| P(1,0) | $A_{10} = \begin{pmatrix}9&10\cr13&14\end{pmatrix}$ | $B_{10} = \begin{pmatrix}3&0\cr0&3\end{pmatrix}$ | $C_{10}$ |
-| P(1,1) | $A_{11} = \begin{pmatrix}11&12\cr15&16\end{pmatrix}$ | $B_{11} = \begin{pmatrix}4&0\cr0&4\end{pmatrix}$ | $C_{11}$ |
+| P(0,0) | $A_{00}$ | $B_{00}$ | $C_{00}$ |
+| P(0,1) | $A_{01}$ | $B_{01}$ | $C_{01}$ |
+| P(1,0) | $A_{10}$ | $B_{10}$ | $C_{10}$ |
+| P(1,1) | $A_{11}$ | $B_{11}$ | $C_{11}$ |
+
+Los valores de las losetas son
+
+$$
+A_{00}=\begin{pmatrix}1&2\cr5&6\end{pmatrix},\quad
+A_{01}=\begin{pmatrix}3&4\cr7&8\end{pmatrix},\quad
+A_{10}=\begin{pmatrix}9&10\cr13&14\end{pmatrix},\quad
+A_{11}=\begin{pmatrix}11&12\cr15&16\end{pmatrix},
+$$
+
+$$
+B_{00}=\begin{pmatrix}1&0\cr0&1\end{pmatrix},\quad
+B_{01}=\begin{pmatrix}2&0\cr0&2\end{pmatrix},\quad
+B_{10}=\begin{pmatrix}3&0\cr0&3\end{pmatrix},\quad
+B_{11}=\begin{pmatrix}4&0\cr0&4\end{pmatrix}.
+$$
 
 Tener esas losetas no basta. Por ejemplo, P(0,0) debe calcular
 
@@ -633,12 +663,21 @@ pero solo dispone de $A_{00}$ y $B_{00}$: le faltan $A_{01}$ (que está en su ve
 - *Difusión de $B$ por columnas:* P(0,0) difunde $B_{00}$ a P(1,0); P(0,1) difunde $B_{01}$ a P(1,1).
 - *Actualización local:*
 
-| Proceso | Operación | Acumulado |
-|---|---|---|
-| P(0,0) | $C_{00} \mathrel{+}= A_{00}B_{00}$ | $\begin{pmatrix}1&2\cr5&6\end{pmatrix}$ |
-| P(0,1) | $C_{01} \mathrel{+}= A_{00}B_{01}$ | $\begin{pmatrix}2&4\cr10&12\end{pmatrix}$ |
-| P(1,0) | $C_{10} \mathrel{+}= A_{10}B_{00}$ | $\begin{pmatrix}9&10\cr13&14\end{pmatrix}$ |
-| P(1,1) | $C_{11} \mathrel{+}= A_{10}B_{01}$ | $\begin{pmatrix}18&20\cr26&28\end{pmatrix}$ |
+| Proceso | Operación |
+|---|---|
+| P(0,0) | $C_{00} \mathrel{+}= A_{00}B_{00}$ |
+| P(0,1) | $C_{01} \mathrel{+}= A_{00}B_{01}$ |
+| P(1,0) | $C_{10} \mathrel{+}= A_{10}B_{00}$ |
+| P(1,1) | $C_{11} \mathrel{+}= A_{10}B_{01}$ |
+
+Acumulado después de la etapa 1:
+
+$$
+C_{00}=\begin{pmatrix}1&2\cr5&6\end{pmatrix},\quad
+C_{01}=\begin{pmatrix}2&4\cr10&12\end{pmatrix},\quad
+C_{10}=\begin{pmatrix}9&10\cr13&14\end{pmatrix},\quad
+C_{11}=\begin{pmatrix}18&20\cr26&28\end{pmatrix}.
+$$
 
 **Etapa 2 (franja $k = 1$).** Cambian los propietarios que difunden:
 
@@ -646,12 +685,30 @@ pero solo dispone de $A_{00}$ y $B_{00}$: le faltan $A_{01}$ (que está en su ve
 - *Difusión de $B$ por columnas:* P(1,0) difunde $B_{10}$ a P(0,0); P(1,1) difunde $B_{11}$ a P(0,1).
 - *Actualización local:*
 
-| Proceso | Operación | Aporte | Resultado final |
-|---|---|---|---|
-| P(0,0) | $C_{00} \mathrel{+}= A_{01}B_{10}$ | $\begin{pmatrix}9&12\cr21&24\end{pmatrix}$ | $C_{00}=\begin{pmatrix}10&14\cr26&30\end{pmatrix}$ |
-| P(0,1) | $C_{01} \mathrel{+}= A_{01}B_{11}$ | $\begin{pmatrix}12&16\cr28&32\end{pmatrix}$ | $C_{01}=\begin{pmatrix}14&20\cr38&44\end{pmatrix}$ |
-| P(1,0) | $C_{10} \mathrel{+}= A_{11}B_{10}$ | $\begin{pmatrix}33&36\cr45&48\end{pmatrix}$ | $C_{10}=\begin{pmatrix}42&46\cr58&62\end{pmatrix}$ |
-| P(1,1) | $C_{11} \mathrel{+}= A_{11}B_{11}$ | $\begin{pmatrix}44&48\cr60&64\end{pmatrix}$ | $C_{11}=\begin{pmatrix}62&68\cr86&92\end{pmatrix}$ |
+| Proceso | Operación |
+|---|---|
+| P(0,0) | $C_{00} \mathrel{+}= A_{01}B_{10}$ |
+| P(0,1) | $C_{01} \mathrel{+}= A_{01}B_{11}$ |
+| P(1,0) | $C_{10} \mathrel{+}= A_{11}B_{10}$ |
+| P(1,1) | $C_{11} \mathrel{+}= A_{11}B_{11}$ |
+
+Aporte de la etapa 2 a cada acumulador:
+
+$$
+A_{01}B_{10}=\begin{pmatrix}9&12\cr21&24\end{pmatrix},\quad
+A_{01}B_{11}=\begin{pmatrix}12&16\cr28&32\end{pmatrix},\quad
+A_{11}B_{10}=\begin{pmatrix}33&36\cr45&48\end{pmatrix},\quad
+A_{11}B_{11}=\begin{pmatrix}44&48\cr60&64\end{pmatrix}.
+$$
+
+Resultado final de cada proceso:
+
+$$
+C_{00}=\begin{pmatrix}10&14\cr26&30\end{pmatrix},\quad
+C_{01}=\begin{pmatrix}14&20\cr38&44\end{pmatrix},\quad
+C_{10}=\begin{pmatrix}42&46\cr58&62\end{pmatrix},\quad
+C_{11}=\begin{pmatrix}62&68\cr86&92\end{pmatrix}.
+$$
 
 **Resultado.** Al reunir las cuatro losetas se obtiene
 
@@ -758,7 +815,13 @@ Es el motivo por el cual, incluso con un solo proceso, `PDGEMM` rinde 47 GFLOPS 
 
 ### 6.5 El problema del orden en memoria y el artilugio matemático
 
-ScaLAPACK hereda de Fortran el orden ***column-major***: los elementos de una **columna** son consecutivos en memoria. En C, en cambio, las matrices son *row-major*. Para una matriz de 2 filas y 3 columnas $\begin{pmatrix}1&2&3\cr4&5&6\end{pmatrix}$:
+ScaLAPACK hereda de Fortran el orden ***column-major***: los elementos de una **columna** son consecutivos en memoria. En C, en cambio, las matrices son *row-major*. Para una matriz de 2 filas y 3 columnas
+
+$$
+\begin{pmatrix}1&2&3\cr4&5&6\end{pmatrix}
+$$
+
+la memoria queda así:
 
 | | Row-major (C) | Column-major (Fortran, ScaLAPACK) |
 |---|---|---|
@@ -770,7 +833,19 @@ ScaLAPACK hereda de Fortran el orden ***column-major***: los elementos de una **
 
 **El artilugio**, en dos pasos:
 
-1. *Los mismos números admiten dos lecturas.* La memoria `1 2 3 4 5 6` leída por filas (C) es $\begin{pmatrix}1&2&3\cr4&5&6\end{pmatrix}$; leída por columnas (ScaLAPACK) es $\begin{pmatrix}1&4\cr2&5\cr3&6\end{pmatrix}$, la **transpuesta**. No se movió ningún dato: solo cambió la forma de leerlos. Esto vale para $A$, $B$ y $C$.
+1. *Los mismos números admiten dos lecturas.* La memoria `1 2 3 4 5 6` leída por filas (C) es
+
+   $$
+   \begin{pmatrix}1&2&3\cr4&5&6\end{pmatrix}
+   $$
+
+   y leída por columnas (ScaLAPACK) es
+
+   $$
+   \begin{pmatrix}1&4\cr2&5\cr3&6\end{pmatrix},
+   $$
+
+   la **transpuesta**. No se movió ningún dato: solo cambió la forma de leerlos. Esto vale para $A$, $B$ y $C$.
 2. *La transpuesta de un producto invierte el orden:* $(AB)^T = B^T A^T$.
 
 Lo que ScaLAPACK "ve" son $A^T$, $B^T$ y $C^T$. Entonces, en lugar de pedirle $C = AB$, se le pide lo equivalente en su mundo: **multiplicar lo que ve como $B^T$ por lo que ve como $A^T$ y guardar el resultado en lo que ve como $C^T$**. ScaLAPACK escribe $C^T$ en column-major y esa misma memoria, leída en row-major, es $C$. Dicho de otro modo, ScaLAPACK calcula la **transpuesta del resultado**, y esa transpuesta, leída en row-major, **es exactamente la matriz $C$ buscada**, sin ningún movimiento de datos.

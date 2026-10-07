@@ -12,10 +12,17 @@
 #           --limite-ram [--cgroup SWAP_GB]   experimento de cruce del limite de RAM
 #           --nmax-serial N   N maximo comun a seriales/mpi_ijk/mpi_ikj (defecto 20000)
 #           --solo seriales|mpi   corre solo ese grupo (defecto: todos)
+#           --desde-archivo [--dir-matrices DIR]   A y B se leen de archivos de texto
+#                             (A_<n>.txt/B_<n>.txt, se crean si faltan) en vez de generarse;
+#                             segundos_generacion pasa a ser el tiempo de lectura.
+#                             Salida por defecto: resultados/<perfil>_<cores>c_archivo
+#           --cache-frio      (con --desde-archivo) saca A y B del cache del SO antes de cada
+#                             corrida, para medir lectura real de disco
 #           --repeticiones R  repeticiones para N > --n-chico (defecto 5)
 #           --reps-chicas R --n-chico N   repeticiones para N <= N (defecto 10 y 2000)
 #
 # Salida: resultados/<perfil>_<cores>c/crudo.csv
+#   (con --desde-archivo la carpeta lleva sufijo _archivo)
 #   perfil,n,procesos,algoritmo,repeticion,segundos,gflops,segundos_generacion
 #   (segundos = solo el producto [+ distribucion/recoleccion en MPI]; segundos_generacion =
 #    tiempo de crear A y B, medido una vez por corrida, repetido en cada fila)
@@ -26,7 +33,7 @@ cd "$(dirname "$0")/.."
 
 PERFIL=servidor; CORES=""; RAM_GB=""; NS=""; PS=""; ALGS=""; TIMEOUT=""
 SOLO=""; LIMITE=0; SWAP_GB=""; NMAX_SERIAL=20000; REPS=5; REPS_CHICAS=10; N_CHICO=2000
-SALIDA=""; DRY=0
+SALIDA=""; DRY=0; DESDE_ARCHIVO=0; CACHE_FRIO=0; DIR_MATRICES=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --perfil) PERFIL=$2; shift 2;;   --cores) CORES=$2; shift 2;;
@@ -38,6 +45,7 @@ while [ $# -gt 0 ]; do
     --solo) SOLO=$2; shift 2;;
     --repeticiones) REPS=$2; shift 2;;  --reps-chicas) REPS_CHICAS=$2; shift 2;;
     --n-chico) N_CHICO=$2; shift 2;;
+    --desde-archivo) DESDE_ARCHIVO=1; shift;;  --cache-frio) CACHE_FRIO=1; shift;;  --dir-matrices) DIR_MATRICES=$2; shift 2;;
     --dry-run) DRY=1; shift;;
     *) echo "Argumento desconocido: $1" >&2; exit 1;;
   esac
@@ -98,6 +106,8 @@ rate_gflops() { case $1 in *ijk) echo 1;; *ikj) echo 6;; *) echo 25;; esac; }
 
 OUT=${SALIDA:-resultados/${PERFIL}_${CORES}c}
 [ "$LIMITE" = 1 ] && OUT=${SALIDA:-resultados/limite_ram_${RAM_GB}g_${CORES}c}
+[ "$DESDE_ARCHIVO" = 1 ] && [ -z "$SALIDA" ] && [ "$LIMITE" = 0 ] && OUT=${OUT}_archivo$([ "$CACHE_FRIO" = 1 ] && echo _frio)
+DIR_MATRICES=${DIR_MATRICES:-tests/datos}
 BIN=bin/bench_${PERFIL}
 mkdir -p "$OUT" "$BIN"
 CSV=$OUT/crudo.csv; HECHOS=$OUT/hechos.txt; FALLOS=$OUT/fallos.txt
@@ -149,6 +159,40 @@ disponible() { # alg
                 # prueba de enlace real (ldconfig no ve librerias de conda)
                 echo 'int main(void){return 0;}' |                   mpicc -x c - -o /dev/null $SCALAPACK_LIBS 2>/dev/null || return 1;;
   esac; return 0
+}
+
+# ---------- Matrices en archivo ----------
+# Se generan una sola vez por N (mismas semillas que los benchmarks) y se
+# comparten entre algoritmos y repeticiones. Nota: tras la primera lectura el
+# archivo queda en el cache de paginas del SO; para medir disco en frio, vaciar
+# el cache entre corridas (root: sync; echo 3 > /proc/sys/vm/drop_caches).
+ARGS_ARCHIVO=""
+asegurar_matrices() { # n
+  [ -s "$DIR_MATRICES/A_$1.txt" ] && [ -s "$DIR_MATRICES/B_$1.txt" ] && return 0
+  mkdir -p "$DIR_MATRICES" "$BIN"
+  [ -x "$BIN/generar_matrices" ] || gcc -std=gnu11 -O2 src/tools/generar_matrices.c src/common/matrix.c     -o "$BIN/generar_matrices" 2>>"$OUT/compilacion.log" || return 1
+  echo "[generando] matrices n=$1 en $DIR_MATRICES"
+  "$BIN/generar_matrices" "$1" "$DIR_MATRICES"
+}
+
+# Vacia del cache de paginas los archivos de A y B. Con root usa drop_caches
+# (todo el cache); sin root usa dd iflag=nocache (posix_fadvise DONTNEED, solo
+# esos archivos y solo paginas limpias).
+AVISO_FRIO=0
+enfriar_cache() { # n
+  sync
+  if [ -w /proc/sys/vm/drop_caches ] && echo 3 > /proc/sys/vm/drop_caches 2>/dev/null; then return 0; fi
+  if sudo -n true 2>/dev/null && echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null 2>&1; then return 0; fi
+  local f ok=1
+  for f in "$DIR_MATRICES/A_$1.txt" "$DIR_MATRICES/B_$1.txt"; do
+    dd if="$f" iflag=nocache count=0 status=none 2>/dev/null || ok=0
+  done
+  [ $ok = 1 ] && return 0
+  if [ $AVISO_FRIO = 0 ]; then
+    echo "AVISO: no se pudo vaciar el cache (sin root ni dd iflag=nocache); las lecturas pueden venir de RAM." >&2
+    AVISO_FRIO=1
+  fi
+  return 0
 }
 
 # ---------- Plan ----------
@@ -252,12 +296,17 @@ for alg in $ALGS; do
       if ! compilar "$alg" "$n"; then
         echo "$key compilacion" >> "$FALLOS"; echo "[ERROR compilar] $key"; continue; fi
       exe=$BIN/${alg}_${n}
+      if [ "$DESDE_ARCHIVO" = 1 ]; then
+        asegurar_matrices "$n" || { echo "$key matrices" >> "$FALLOS"; echo "[ERROR matrices] $key"; continue; }
+        ARGS_ARCHIVO="--archivo-a $DIR_MATRICES/A_$n.txt --archivo-b $DIR_MATRICES/B_$n.txt"
+      fi
       if es_serial "$alg"; then
         runner=""; thr=1
       else
         runner="mpirun ${MPIRUN_EXTRA:-} --bind-to core --map-by core -np $p"; thr=1
       fi
       echo "[$(date +%H:%M:%S)] $key reps=$reps (est ~${est}s)$excede"
+      [ "$DESDE_ARCHIVO" = 1 ] && [ "$CACHE_FRIO" = 1 ] && enfriar_cache "$n"
       tmp=$(mktemp)
       # Page faults y OOM: /usr/bin/time (GNU) suma los fallos de todos los
       # procesos hijos (los ranks MPI); el contador oom_kill del cgroup detecta
@@ -265,7 +314,7 @@ for alg in $ALGS; do
       medidor=""; [ -x /usr/bin/time ] && medidor="/usr/bin/time -o $tmp.time -f %e,%R,%F,%M"
       oom0=$(awk '/^oom_kill /{print $2}' /sys/fs/cgroup/memory.events 2>/dev/null); oom0=${oom0:-0}
       OPENBLAS_NUM_THREADS=$thr OMP_NUM_THREADS=$thr \
-        timeout "$TIMEOUT" $medidor $runner "$exe" --csv --repeticiones "$reps" > "$tmp" 2>"$tmp.err"
+        timeout "$TIMEOUT" $medidor $runner "$exe" --csv --repeticiones "$reps" $ARGS_ARCHIVO > "$tmp" 2>"$tmp.err"
       rc=$?
       oom1=$(awk '/^oom_kill /{print $2}' /sys/fs/cgroup/memory.events 2>/dev/null); oom1=${oom1:-0}
       if [ $rc -eq 0 ]; then estado=ok; elif [ $rc -eq 124 ]; then estado=timeout

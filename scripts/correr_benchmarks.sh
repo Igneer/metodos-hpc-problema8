@@ -15,9 +15,9 @@
 #           --desde-archivo [--dir-matrices DIR]   A y B se leen de archivos de texto
 #                             (A_<n>.txt/B_<n>.txt, se crean si faltan) en vez de generarse;
 #                             segundos_generacion pasa a ser el tiempo de lectura.
+#                             Siempre con cache frio: antes de cada corrida se saca A y B del
+#                             cache del SO, para que todas midan lectura real de disco.
 #                             Salida por defecto: resultados/<perfil>_<cores>c_archivo
-#           --cache-frio      (con --desde-archivo) saca A y B del cache del SO antes de cada
-#                             corrida, para medir lectura real de disco
 #           --repeticiones R  repeticiones para N > --n-chico (defecto 5)
 #           --reps-chicas R --n-chico N   repeticiones para N <= N (defecto 10 y 2000)
 #
@@ -33,7 +33,7 @@ cd "$(dirname "$0")/.."
 
 PERFIL=servidor; CORES=""; RAM_GB=""; NS=""; PS=""; ALGS=""; TIMEOUT=""
 SOLO=""; LIMITE=0; SWAP_GB=""; NMAX_SERIAL=20000; REPS=5; REPS_CHICAS=10; N_CHICO=2000
-SALIDA=""; DRY=0; DESDE_ARCHIVO=0; CACHE_FRIO=0; DIR_MATRICES=""
+SALIDA=""; DRY=0; DESDE_ARCHIVO=0; DIR_MATRICES=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --perfil) PERFIL=$2; shift 2;;   --cores) CORES=$2; shift 2;;
@@ -45,7 +45,7 @@ while [ $# -gt 0 ]; do
     --solo) SOLO=$2; shift 2;;
     --repeticiones) REPS=$2; shift 2;;  --reps-chicas) REPS_CHICAS=$2; shift 2;;
     --n-chico) N_CHICO=$2; shift 2;;
-    --desde-archivo) DESDE_ARCHIVO=1; shift;;  --cache-frio) CACHE_FRIO=1; shift;;  --dir-matrices) DIR_MATRICES=$2; shift 2;;
+    --desde-archivo) DESDE_ARCHIVO=1; shift;;  --dir-matrices) DIR_MATRICES=$2; shift 2;;
     --dry-run) DRY=1; shift;;
     *) echo "Argumento desconocido: $1" >&2; exit 1;;
   esac
@@ -106,7 +106,7 @@ rate_gflops() { case $1 in *ijk) echo 1;; *ikj) echo 6;; *) echo 25;; esac; }
 
 OUT=${SALIDA:-resultados/${PERFIL}_${CORES}c}
 [ "$LIMITE" = 1 ] && OUT=${SALIDA:-resultados/limite_ram_${RAM_GB}g_${CORES}c}
-[ "$DESDE_ARCHIVO" = 1 ] && [ -z "$SALIDA" ] && [ "$LIMITE" = 0 ] && OUT=${OUT}_archivo$([ "$CACHE_FRIO" = 1 ] && echo _frio)
+[ "$DESDE_ARCHIVO" = 1 ] && [ -z "$SALIDA" ] && [ "$LIMITE" = 0 ] && OUT=${OUT}_archivo
 DIR_MATRICES=${DIR_MATRICES:-tests/datos}
 BIN=bin/bench_${PERFIL}
 mkdir -p "$OUT" "$BIN"
@@ -163,9 +163,8 @@ disponible() { # alg
 
 # ---------- Matrices en archivo ----------
 # Se generan una sola vez por N (mismas semillas que los benchmarks) y se
-# comparten entre algoritmos y repeticiones. Nota: tras la primera lectura el
-# archivo queda en el cache de paginas del SO; para medir disco en frio, vaciar
-# el cache entre corridas (root: sync; echo 3 > /proc/sys/vm/drop_caches).
+# comparten entre algoritmos y repeticiones. Antes de cada corrida se vacia su
+# cache de paginas (enfriar_cache), asi todas leen del disco en las mismas condiciones.
 ARGS_ARCHIVO=""
 asegurar_matrices() { # n
   [ -s "$DIR_MATRICES/A_$1.txt" ] && [ -s "$DIR_MATRICES/B_$1.txt" ] && return 0
@@ -306,7 +305,7 @@ for alg in $ALGS; do
         runner="mpirun ${MPIRUN_EXTRA:-} --bind-to core --map-by core -np $p"; thr=1
       fi
       echo "[$(date +%H:%M:%S)] $key reps=$reps (est ~${est}s)$excede"
-      [ "$DESDE_ARCHIVO" = 1 ] && [ "$CACHE_FRIO" = 1 ] && enfriar_cache "$n"
+      [ "$DESDE_ARCHIVO" = 1 ] && enfriar_cache "$n"
       tmp=$(mktemp)
       # Page faults y OOM: /usr/bin/time (GNU) suma los fallos de todos los
       # procesos hijos (los ranks MPI); el contador oom_kill del cgroup detecta

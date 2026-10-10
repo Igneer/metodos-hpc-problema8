@@ -619,6 +619,8 @@ Esto resuelve los dos problemas del capítulo anterior.
 
 Desaparece la *memory wall*: matrices que no caben en un nodo caben en el conjunto de la grilla.
 
+Esta es una propiedad del algoritmo. El programa de referencia que se usa en este trabajo (capítulo 6) conserva las matrices completas en el rank 0, que es quien lee o genera la entrada y recolecta *C*, de modo que ese proceso no alcanza el valor de $3n^2/p$. La sección 7.13 cuantifica la diferencia con mediciones de memoria.
+
 **Comunicación.** Un proceso solo necesita, para su loseta de *C*, la franja de filas de *A* de su fila de la grilla y la franja de columnas de *B* de su columna de la grilla. Recibe en total $n^2\left(\frac{1}{P_r} + \frac{1}{P_c}\right)$ elementos, que para una grilla casi cuadrada es del orden de $2n^2/\sqrt{p}$. Con $p = 48$ (grilla de $6 \times 8$ ) cada proceso recibe aproximadamente $0{,}29 \cdot n^2$ elementos, frente a los $1{,}02 \cdot n^2$ de la partición 1D. Y la relación entre cómputo y comunicación mejora de $2n/(p+1)$ a aproximadamente $n/\sqrt{p}$:
 
 | $n = 10\,000$, $p = 48$ | Operaciones por elemento recibido |
@@ -1243,7 +1245,7 @@ Se compara la versión 1D propia con la referencia 2D (`PDGEMM`) con $p = 48$:
 La versión 1D con blocking es **más rápida que `PDGEMM`** para $n \le 1000$ (donde la sobrecarga de BLACS y la redistribución de `PDGEMM` pesan más) y queda a entre 1,2 y 1,4 veces para $1500 \le n \le 5000$. En $n = 7500$ y $n = 10\,000$ ambas son equivalentes (razón de 0,99 y 1,08). Que una implementación propia de pocas líneas quede cerca de la biblioteca de referencia es un resultado positivo; pero hay que interpretarlo con cuidado por tres razones:
 
 1. **No es una comparación aislada de la partición.** `PDGEMM` usa el `DGEMM` de OpenBLAS, un kernel local unas 3,4 veces más rápido que el nuestro (47 frente a 14 GFLOPS con un proceso). Con el mismo kernel local, la teoría del capítulo 5 anticipa una ventaja del esquema 2D que aquí queda enmascarada.
-2. **El equipo es un único nodo con 192 GB.** La limitación que la partición 2D resuelve —la memoria de *B* replicada— no es vinculante: 38 GB de copias caben en la memoria disponible. El beneficio de SUMMA aparece cuando la matriz no cabe en un nodo o cuando la red es el cuello de botella.
+2. **El equipo es un único nodo con 192 GB.** La limitación que la partición 2D resuelve —la memoria de *B* replicada— no es vinculante: 38 GB de copias caben en la memoria disponible. El beneficio de SUMMA aparece cuando la matriz no cabe en un nodo o cuando la red es el cuello de botella (la sección 7.13 mide la memoria por proceso de ambas versiones).
 3. **`PDGEMM` también muestra mesetas** (con $n = 10\,000$, entre $p = 4$ y $p = 8$ el tiempo prácticamente no mejora: 15,3 s a 14,8 s). No se estudió la causa; podría deberse a la forma de la grilla elegida o a contención de memoria, pero no se verificó.
 
 Visto en términos de speedup absoluto contra el mejor serial, con 48 procesos y $n = 10\,000$ la versión 1D con blocking logra 23,4 y `PDGEMM` 25,4; el máximo de `PDGEMM` es 34,0 con $n = 5000$, donde supera a nuestra versión en un 40 %. Es notable que, para $n \ge 7500$, ambas implementaciones se estabilizan en torno a 330-350 GFLOPS, lo que sugiere un techo común del equipo con 48 procesos (por ancho de banda de memoria o frecuencia; no se verificó). La diferencia está dentro de lo esperable si se considera que `PDGEMM` parte de un kernel mucho más eficiente: la partición 2D con SUMMA no se aprovecha en su máximo en este entorno, y su valor se vería en matrices que superan la memoria de un nodo, en la ejecución multinodo o con GPU (capítulo 8). Como indica la regla de ingeniería habitual, si las matrices caben en un solo nodo conviene un BLAS de memoria compartida (OpenBLAS, cuBLAS, MAGMA) antes que una biblioteca distribuida.
@@ -1388,7 +1390,36 @@ Lo que muestran los datos:
 - **El kernel serial mantiene su rendimiento al crecer $n$:** 12,7 GFLOPS con blocking y 5,15 sin él, frente a 13,5 y 5,8 con $n = 10\,000$.
 - **Faltan datos.** La corrida de `ikj` blocking 1D con $n = 15\,000$ figura iniciada en `benchmark_cruce_ram.log` pero no tiene filas en `crudo.csv`, por lo que no se la analiza; tampoco se midió `PDGEMM` con este $n$.
 
-Este resultado es el argumento empírico más concreto a favor de la partición 2D del capítulo 5: en SUMMA cada proceso guarda solo bloques de *A*, *B* y *C* y la memoria por proceso baja con $p$ en lugar de mantenerse. Esa ventaja no pudo comprobarse aquí por no haberse medido `PDGEMM` con $n = 15\,000$; queda como trabajo pendiente.
+Este resultado es el argumento empírico más concreto a favor de la partición 2D del capítulo 5: en SUMMA cada proceso guarda solo bloques de *A*, *B* y *C* y la memoria por proceso baja con $p$ en lugar de mantenerse. Esa ventaja no pudo comprobarse aquí por no haberse medido `PDGEMM` con $n = 15\,000$; queda como trabajo pendiente. Lo que sí se midió es la memoria por proceso de ambas versiones con un tamaño menor, en la sección 7.13.
+
+### 7.13 Memoria por proceso: 1D frente a 2D
+
+Para contrastar la memoria de las dos particiones se midió el pico de memoria residente (RSS) de cada proceso con $n = 5000$, $p = 8$ y una repetición, en el servidor de 48 cores. Una matriz de $5000 \times 5000$ de `double` ocupa 200 MB. El pico se obtuvo con `resource.getrusage(RUSAGE_CHILDREN).ru_maxrss`, ejecutando cada rank bajo `mpirun`:
+
+```bash
+mpirun -np 8 python3 -c "
+import os,resource,subprocess
+subprocess.run(['bin/bench_servidor/mpi_ikj_5000','--repeticiones','1'],stdout=subprocess.DEVNULL)
+print('rank',os.environ['OMPI_COMM_WORLD_RANK'],':',resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,'KB')"
+```
+
+(Para la 2D se reemplaza el binario por `ref_pdgemm_5000`.)
+
+**Tabla 7.12.** Pico de RSS por proceso, $n = 5000$, $p = 8$:
+
+| | Raíz (rank 0) | Resto de procesos | Suma de los 8 procesos |
+|---|--:|--:|--:|
+| 1D (`ikj`) | 676 MB | 276–279 MB | 2,62 GB |
+| 2D (`PDGEMM`) | 791 MB | 155–164 MB | 1,90 GB |
+
+Lo que muestran los datos:
+
+- **En la 1D**, cada proceso distinto de la raíz mantiene una copia completa de *B* más sus porciones de *A* y *C*, es decir $n^2 + 2n^2/p$ elementos (250 MB); el resto hasta los 276–279 MB es el entorno de MPI (unos 26–29 MB).
+- **En la 2D**, las tres losetas suman $3n^2/p$ elementos (75 MB), pero el consumo medido es de unos 160 MB. La diferencia corresponde al entorno de MPI y a los buffers internos de `pdgemr2d_` y `pdgemm_` (paneles de *A* y *B* y espacio de trabajo), que el modelo teórico del capítulo 5 no incluye. Aun así, los procesos de la 2D usan algo más de la mitad que los de la 1D, y la suma de memoria del nodo baja cerca de un 27 %.
+- **La raíz no mejora.** En ambas versiones conserva las tres matrices completas ($3n^2 = 600$ MB), porque es el proceso que lee o genera la entrada y recolecta *C*. En la 2D su consumo es incluso un 17 % mayor (791 frente a 676 MB) por los buffers adicionales. El pico de memoria que decide si un problema cabe en un nodo sigue fijado por la raíz y no desciende al aumentar $p$. Es una propiedad de este programa de referencia y no del algoritmo SUMMA: para aprovechar por completo la reducción a $3n^2/p$, cada proceso debería leer o generar su propia loseta (sección 8.1).
+- **Memoria declarada y memoria ocupada.** Las matrices del programa se declaran como arrays estáticos del tamaño completo en todos los procesos (la cantidad de elementos depende de constantes de compilación, mientras que el tamaño de la loseta depende de la grilla, que se elige en ejecución). En los procesos distintos de la raíz eso son unos 1,2 GB de espacio declarado, pero el RSS es de 155–164 MB: el sistema operativo asigna la memoria física recién cuando una página se toca por primera vez, de modo que las páginas nunca usadas no ocupan RAM.
+
+Es una única medición (un valor de $n$, un valor de $p$ y una repetición), por lo que no permite hablar de tendencias. Con $p$ mayor, la fórmula predice que los procesos de la 1D se mantendrían cerca de $n^2$ elementos (200 MB con $n = 5000$ ) y los de la 2D bajarían hacia $3n^2/p$ (12,5 MB con $p = 48$ ) más los buffers de la biblioteca; esa extrapolación no se midió.
 
 ---
 
@@ -1406,6 +1437,7 @@ Las mejoras se ordenan de menor a mayor alcance: primero las que corrigen limita
 - **<i>B</i> (en 1D):** como todos necesitan la matriz completa, puede generarse **en cada proceso** con la misma semilla, reemplazando la difusión por una generación local redundante ( $O(n^2)$ de cómputo barato frente a $O(n^2)$ de comunicación costosa). En la versión 2D cada proceso genera solo su loseta.
 - **Reproducibilidad:** con un generador de números pseudoaleatorios *sin estado* (el valor de cada elemento es una función de $(i, j, \text{semilla})$ ) el resultado es idéntico para cualquier $p$ y cualquier partición, lo que permite validar sin mover datos.
 - **Verificación sin recolectar *C*:** comprobar el resultado con una norma o una suma de control obtenidas con `MPI_Reduce`, o con la verificación probabilística de Freivalds ( $ABx = C x$ para un vector aleatorio $x$, que cuesta $O(n^2)$ ), evita el `Gatherv` final cuando no se necesita *C* en una única máquina.
+- **Memoria del rank 0:** hoy el rank 0 mantiene las tres matrices completas ( $3n^2$ elementos, 600 MB con $n = 5000$; sección 7.13), y esa cifra fija el pico de memoria del nodo, que no baja al aumentar $p$. Si cada proceso genera o lee únicamente su loseta y *C* se verifica sin recolectarla, ningún proceso necesita una matriz global: el consumo por proceso pasa a $3n^2/p$ más los buffers de la biblioteca, también en el rank 0, y se obtiene en el programa la reducción de memoria que la partición 2D ofrece en el algoritmo (capítulo 5). Si *C* debe entregarse completa en un único proceso, ese proceso conserva $n^2$ elementos, un tercio de lo actual. No se implementó ni se midió.
 - **Entrada/salida real:** si las matrices vienen de archivos, la lectura paralela con MPI-IO distribuye ese costo. La sección 7.4 lo cuantifica: leer en texto con `fscanf` cuesta 11–16 veces más que generar y reduce la cota de Amdahl de la corrida completa a 4,2 con $n = 10\,000$. Un formato binario, con cada proceso leyendo solo sus filas de *A* y una parte de *B* (armada con `Allgatherv`), atacaría directamente esa fracción serial.
 
 Con ello desaparece la fracción serial de generación, y la cota de Amdahl pasa a depender solo de la comunicación y la contención de memoria.

@@ -90,10 +90,6 @@ compilar mpicc matmul_ijk_mpi src/mpi/matmul_ijk.c src/common/matrix.c src/commo
 compilar mpicc matmul_ikj_mpi src/mpi/matmul_ikj.c src/common/matrix.c src/common/cli.c src/common/particiones.c
 compilar mpicc matmul_ikjb_mpi src/mpi/matmul_ikj_bloqueado.c src/common/matrix.c src/common/cli.c src/common/particiones.c
 
-compilar mpicc matmul_summa_2d src/mpi/matmul_summa_2d.c src/mpi/2d/topologia_2d.c \
-    src/mpi/2d/transferencias_2d.c src/mpi/2d/particion_2d.c src/mpi/2d/summa_2d.c \
-    src/mpi/2d/kernel_propio.c src/common/matrix.c src/common/cli.c src/common/particiones.c
-
 # La referencia ScaLAPACK es opcional: si no se puede enlazar, se omite.
 PDGEMM_OK=1
 if ! mpicc $CFLAGS src/ref/matmul_pdgemm.c src/common/matrix.c src/common/cli.c \
@@ -109,7 +105,6 @@ BIN_IKJB_S="$BIN_DIR/matmul_ikjb_s"
 BIN_IJK_MPI="$BIN_DIR/matmul_ijk_mpi"
 BIN_IKJ_MPI="$BIN_DIR/matmul_ikj_mpi"
 BIN_IKJB_MPI="$BIN_DIR/matmul_ikjb_mpi"
-BIN_SUMMA_2D="$BIN_DIR/matmul_summa_2d"
 BIN_PDGEMM="$BIN_DIR/matmul_pdgemm"
 
 echo ""
@@ -128,7 +123,6 @@ done
 # Grillas 2x2 (np=4) y 3x2 (np=6, con bloques vacios porque N=4).
 export OPENBLAS_NUM_THREADS=1
 for np in 1 2 3 4 6; do
-    comparar_salida "mpi summa_2d (np=$np)" "$(mpirun --oversubscribe -np "$np" "$BIN_SUMMA_2D" "${ARGS[@]}")"
     if [ "$PDGEMM_OK" -eq 1 ]; then
         comparar_salida "scalapack pdgemm (np=$np)" "$(mpirun --oversubscribe -np "$np" "$BIN_PDGEMM" "${ARGS[@]}")"
     fi

@@ -12,7 +12,7 @@ La multiplicación de matrices densas, $C = A \times B$, es una de las operacion
 
 En la primera se estudian tres versiones **seriales** del algoritmo. La versión ingenua `ijk` recorre la segunda matriz por columnas y desaprovecha la memoria caché; reordenar los bucles (`ikj`) elimina ese defecto, y el *blocking* (bloqueado por teselas) hace que los datos en uso permanezcan en caché. En una máquina de 16 cores y 24 GB de RAM, la versión bloqueada resultó entre 3,7 y 26,6 veces más rápida que la ingenua según el tamaño del problema.
 
-En la segunda etapa se paraleliza con **MPI** mediante una partición unidimensional (1D) por filas, implementada de forma propia sobre las tres versiones seriales. Se analizan sus beneficios (simplicidad, una sola difusión de $B$) y su limitación estructural: cada proceso debe almacenar una copia completa de $B$.
+En la segunda etapa se paraleliza con **MPI** mediante una partición unidimensional (1D) por filas, implementada de forma propia sobre las tres versiones seriales. Se analizan sus beneficios (simplicidad, una sola difusión de *B*) y su limitación estructural: cada proceso debe almacenar una copia completa de *B*.
 
 En la tercera etapa se presenta la **partición bidimensional (2D)** como solución a esa limitación, se explica el algoritmo **SUMMA** con un ejemplo numérico completo y se justifica por qué su implementación propia quedó fuera del alcance del proyecto. En su lugar se estudió y utilizó **ScaLAPACK** (`PDGEMM`), que lo emplea internamente, como referencia 2D.
 
@@ -76,23 +76,23 @@ Los gráficos de este informe se regeneran con `python scripts/graficos_informe.
 
 ### 1.1 Definición matemática
 
-Dadas dos matrices densas $A \in \mathbb{R}^{n \times m}$ y $B \in \mathbb{R}^{m \times p}$, su producto es la matriz $C \in \mathbb{R}^{n \times p}$ cuyo elemento en la fila $i$ y la columna $j$ es el producto escalar de la fila $i$ de $A$ por la columna $j$ de $B$:
+Dadas dos matrices densas $A \in \mathbb{R}^{n \times m}$ y $B \in \mathbb{R}^{m \times p}$, su producto es la matriz $C \in \mathbb{R}^{n \times p}$ cuyo elemento en la fila $i$ y la columna $j$ es el producto escalar de la fila $i$ de *A* por la columna $j$ de *B*:
 
 $$
 C_{ij} \;=\; \sum_{k=0}^{m-1} A_{ik}\, B_{kj}, \qquad 0 \le i < n,\; 0 \le j < p .
 $$
 
-La operación solo está definida si el número de columnas de $A$ coincide con el número de filas de $B$. En este trabajo se usan casi siempre matrices cuadradas ($n = m = p$), lo que simplifica el análisis sin perder generalidad: el código admite dimensiones distintas.
+La operación solo está definida si el número de columnas de *A* coincide con el número de filas de *B*. En este trabajo se usan casi siempre matrices cuadradas ($n = m = p$), lo que simplifica el análisis sin perder generalidad: el código admite dimensiones distintas.
 
 Un ejemplo pequeño fija la idea. Con las matrices de $4 \times 4$ que se usarán a lo largo del informe,
 
 $$
-A = \begin{pmatrix} 1 & 2 & 3 & 4 \cr 5 & 6 & 7 & 8 \cr 9 & 10 & 11 & 12 \cr 13 & 14 & 15 & 16 \end{pmatrix},
+A = \begin{pmatrix} 1 & 2 & 3 & 4 \\ 5 & 6 & 7 & 8 \\ 9 & 10 & 11 & 12 \\ 13 & 14 & 15 & 16 \end{pmatrix},
 \qquad
-B = \begin{pmatrix} 1 & 2 & 3 & 1 \cr 3 & 1 & 2 & 3 \cr 2 & 1 & 1 & 2 \cr 1 & 3 & 2 & 1 \end{pmatrix},
+B = \begin{pmatrix} 1 & 2 & 3 & 1 \\ 3 & 1 & 2 & 3 \\ 2 & 1 & 1 & 2 \\ 1 & 3 & 2 & 1 \end{pmatrix},
 $$
 
-el elemento $C_{00}$ es la fila 0 de $A$ por la columna 0 de $B$:
+el elemento $C_{00}$ es la fila 0 de *A* por la columna 0 de *B*:
 
 $$
 C_{00} = 1 \cdot 1 + 2 \cdot 3 + 3 \cdot 2 + 4 \cdot 1 = 17,
@@ -101,7 +101,7 @@ $$
 y el producto completo es
 
 $$
-C = A B = \begin{pmatrix} 17 & 19 & 18 & 17 \cr 45 & 47 & 50 & 45 \cr 73 & 75 & 82 & 73 \cr 101 & 103 & 114 & 101 \end{pmatrix}.
+C = A B = \begin{pmatrix} 17 & 19 & 18 & 17 \\ 45 & 47 & 50 & 45 \\ 73 & 75 & 82 & 73 \\ 101 & 103 & 114 & 101 \end{pmatrix}.
 $$
 
 Estas mismas matrices se reutilizan en los capítulos 2 (blocking) y 5 (SUMMA), de modo que el lector puede comprobar que todas las estrategias llegan al mismo resultado.
@@ -116,13 +116,13 @@ El algoritmo directo calcula $n \cdot p$ elementos y, para cada uno, realiza $m$
 | Datos de entrada y salida | $3n^2$ elementos | $O(n^2)$ |
 | Operaciones por dato (intensidad aritmética) | $\approx 2n/3$ | $O(n)$ |
 
-Hay dos consecuencias prácticas. La primera es que el tiempo crece muy rápido: duplicar $n$ multiplica por ocho el trabajo. Con $n = 10\,000$ son $2 \times 10^{12}$ operaciones, es decir, más de cinco minutos con un único núcleo a unos 6 GFLOPS (así sucedió en las mediciones, ver capítulo 7). La segunda es más sutil y es la clave de todo el informe: **el cómputo crece más rápido que los datos**. Cada elemento de $A$ y de $B$ participa en $n$ productos, de manera que existe, en principio, mucha oportunidad de reutilizar un dato ya traído a la memoria rápida. Aprovechar o desperdiciar esa reutilización es lo que separa a las implementaciones seriales del capítulo 2, y la relación entre cómputo y comunicación es lo que determina la escalabilidad paralela del capítulo 7.
+Hay dos consecuencias prácticas. La primera es que el tiempo crece muy rápido: duplicar $n$ multiplica por ocho el trabajo. Con $n = 10\,000$ son $2 \times 10^{12}$ operaciones, es decir, más de cinco minutos con un único núcleo a unos 6 GFLOPS (así sucedió en las mediciones, ver capítulo 7). La segunda es más sutil y es la clave de todo el informe: **el cómputo crece más rápido que los datos**. Cada elemento de *A* y de *B* participa en $n$ productos, de manera que existe, en principio, mucha oportunidad de reutilizar un dato ya traído a la memoria rápida. Aprovechar o desperdiciar esa reutilización es lo que separa a las implementaciones seriales del capítulo 2, y la relación entre cómputo y comunicación es lo que determina la escalabilidad paralela del capítulo 7.
 
 Existen algoritmos asintóticamente mejores. El de Strassen (1969) reduce el exponente a $\log_2 7 \approx 2{,}807$ a costa de más sumas, mayor uso de memoria y menor estabilidad numérica; en la práctica las bibliotecas de alto rendimiento siguen usando el algoritmo clásico de $O(n^3)$ con una implementación extremadamente cuidadosa, que es el enfoque de este trabajo.
 
 ### 1.3 Un problema *embarazosamente paralelo*
 
-Se llama **embarazosamente paralelo** (*embarrassingly parallel*) a un problema que puede dividirse en tareas independientes que no necesitan comunicarse entre sí durante el cálculo. La multiplicación de matrices cumple esa condición en su núcleo: la fórmula de $C_{ij}$ solo lee una fila de $A$ y una columna de $B$ y no depende de ningún otro elemento de $C$. Por lo tanto, los $n^2$ elementos de $C$ pueden calcularse en cualquier orden, o simultáneamente, sin sincronización.
+Se llama **embarazosamente paralelo** (*embarrassingly parallel*) a un problema que puede dividirse en tareas independientes que no necesitan comunicarse entre sí durante el cálculo. La multiplicación de matrices cumple esa condición en su núcleo: la fórmula de $C_{ij}$ solo lee una fila de *A* y una columna de *B* y no depende de ningún otro elemento de *C*. Por lo tanto, los $n^2$ elementos de *C* pueden calcularse en cualquier orden, o simultáneamente, sin sincronización.
 
 Dicho de otro modo, si todos los procesos tuvieran todos los datos desde el inicio, el trabajo se repartiría de forma casi perfecta:
 
@@ -130,11 +130,11 @@ $$
 T(p) \approx \frac{2n^3}{p \cdot R}, \qquad S(p) \approx p,
 $$
 
-donde $R$ es la velocidad de cómputo de un proceso (en FLOPS). El reparto, además, es naturalmente equilibrado: todas las filas de $C$ cuestan lo mismo.
+donde $R$ es la velocidad de cómputo de un proceso (en FLOPS). El reparto, además, es naturalmente equilibrado: todas las filas de *C* cuestan lo mismo.
 
 ### 1.4 ¿Por qué entonces es un campo de estudio en MPI?
 
-Porque la independencia matemática de las tareas no implica independencia de los *datos*. En un sistema de memoria distribuida (que es el modelo de MPI) cada proceso tiene su propia memoria y solo ve lo que se le envía. Para calcular su porción de $C$, un proceso necesita porciones de $A$ y de $B$ que inicialmente pueden estar en otra parte. Aparecen así tres problemas que no existen en la versión serial:
+Porque la independencia matemática de las tareas no implica independencia de los *datos*. En un sistema de memoria distribuida (que es el modelo de MPI) cada proceso tiene su propia memoria y solo ve lo que se le envía. Para calcular su porción de *C*, un proceso necesita porciones de *A* y de *B* que inicialmente pueden estar en otra parte. Aparecen así tres problemas que no existen en la versión serial:
 
 1. **Qué datos recibe cada proceso** (la *partición*). Un reparto ingenuo obliga a replicar una matriz entera en todos los procesos, lo que consume memoria (la llamada *memory wall*) y ancho de banda.
 2. **Cuánto se comunica y cómo.** Enviar datos cuesta tiempo, y ese tiempo no disminuye al agregar procesos con la misma rapidez que el cómputo. Es la *fracción no paralelizable* de la ley de Amdahl, que se estudia en el capítulo 7.
@@ -174,12 +174,12 @@ C almacena las matrices bidimensionales en orden **row-major**: los elementos de
 
 El bucle más interno de `ijk` varía $k$. Con ello:
 
-- `a[i*m + k]` recorre la fila $i$ de $A$: acceso **contiguo** (paso 1).
-- `b[k*p + j]` recorre la columna $j$ de $B$: acceso **con salto** de $p$ elementos. Para $n = 5000$ son $5000 \times 8 = 40\,000$ bytes entre un acceso y el siguiente.
+- `a[i*m + k]` recorre la fila $i$ de *A*: acceso **contiguo** (paso 1).
+- `b[k*p + j]` recorre la columna $j$ de *B*: acceso **con salto** de $p$ elementos. Para $n = 5000$ son $5000 \times 8 = 40\,000$ bytes entre un acceso y el siguiente.
 
-La memoria no se trae elemento por elemento sino en **líneas de caché** de 64 bytes, es decir, 8 números de doble precisión. Cuando se lee un elemento, llegan también sus siete vecinos de la misma fila. En `ijk` esos vecinos pertenecen a otras columnas de $B$, que no se usarán hasta una iteración posterior del bucle $j$; para entonces, la línea de caché probablemente ya fue desalojada, porque entre medio se recorrieron las $n$ filas de $B$. El resultado es que casi cada acceso a $B$ trae de memoria una línea completa para aprovechar un solo elemento: **no se aprovecha la localidad espacial**. Además, un acceso con saltos grandes y regulares es mucho más difícil de anticipar para el prefetcher del procesador que uno contiguo.
+La memoria no se trae elemento por elemento sino en **líneas de caché** de 64 bytes, es decir, 8 números de doble precisión. Cuando se lee un elemento, llegan también sus siete vecinos de la misma fila. En `ijk` esos vecinos pertenecen a otras columnas de *B*, que no se usarán hasta una iteración posterior del bucle $j$; para entonces, la línea de caché probablemente ya fue desalojada, porque entre medio se recorrieron las $n$ filas de *B*. El resultado es que casi cada acceso a *B* trae de memoria una línea completa para aprovechar un solo elemento: **no se aprovecha la localidad espacial**. Además, un acceso con saltos grandes y regulares es mucho más difícil de anticipar para el prefetcher del procesador que uno contiguo.
 
-El efecto se hace visible en cuanto $B$ deja de entrar en las cachés. Con $n = 1000$, $B$ ocupa 8 MB y `ijk` alcanza 7,5 GFLOPS; con $n = 5000$ ocupa 200 MB y el rendimiento cae a 1,0 GFLOPS (sección 2.5).
+El efecto se hace visible en cuanto *B* deja de entrar en las cachés. Con $n = 1000$, *B* ocupa 8 MB y `ijk` alcanza 7,5 GFLOPS; con $n = 5000$ ocupa 200 MB y el rendimiento cae a 1,0 GFLOPS (sección 2.5).
 
 ### 2.2 Primera mejora: reordenar los bucles (ikj)
 
@@ -194,7 +194,7 @@ for (int i = 0; i < n; i++)
     }
 ```
 
-Ahora las dos matrices que se recorren en el bucle interno —la fila $k$ de $B$ y la fila $i$ de $C$— se leen con **paso 1**. Esto trae tres beneficios, todos consecuencia de la contigüidad:
+Ahora las dos matrices que se recorren en el bucle interno —la fila $k$ de *B* y la fila $i$ de *C*— se leen con **paso 1**. Esto trae tres beneficios, todos consecuencia de la contigüidad:
 
 1. **Localidad espacial.** Cada línea de caché se usa por completo: los ocho elementos que llegan juntos se consumen en ocho iteraciones consecutivas.
 2. **Prefetching.** El acceso secuencial es el patrón que el hardware predice mejor y trae con anticipación.
@@ -204,11 +204,11 @@ La complejidad no cambia; solo se reduce la constante oculta, que en la práctic
 
 #### Lo que ikj todavía no resuelve
 
-Para cada fila $i$ de $A$, el bucle $k$ recorre **todas** las filas de $B$. Si $B$ no cabe en caché, se vuelve a traer completa desde la memoria principal en cada una de las $n$ iteraciones de $i$: $B$ viaja $n$ veces. Con $n = 5000$ esto significa $n \cdot 200\ \text{MB} = 1\ \text{TB}$ de lectura de memoria para un cálculo que, en rigor, solo necesita datos por 600 MB. En el gráfico de la sección 2.5 se ve el efecto: `ikj` rinde 15 GFLOPS mientras $B$ entra en caché ($n = 1000$) y se estabiliza en torno a 6 GFLOPS cuando ya no entra. El programa pasó a estar limitado por el ancho de banda de memoria, no por el cálculo.
+Para cada fila $i$ de *A*, el bucle $k$ recorre **todas** las filas de *B*. Si *B* no cabe en caché, se vuelve a traer completa desde la memoria principal en cada una de las $n$ iteraciones de $i$: *B* viaja $n$ veces. Con $n = 5000$ esto significa $n \cdot 200\ \text{MB} = 1\ \text{TB}$ de lectura de memoria para un cálculo que, en rigor, solo necesita datos por 600 MB. En el gráfico de la sección 2.5 se ve el efecto: `ikj` rinde 15 GFLOPS mientras *B* entra en caché ($n = 1000$) y se estabiliza en torno a 6 GFLOPS cuando ya no entra. El programa pasó a estar limitado por el ancho de banda de memoria, no por el cálculo.
 
 ### 2.3 Segunda mejora: blocking (teselado)
 
-La idea del *blocking* es operar sobre submatrices ("bloques" o "teselas") lo bastante pequeñas como para que los bloques activos —uno de $A$, uno de $B$ y uno de $C$— se reutilicen intensamente desde la caché antes de ser desalojados (qué tamaño es el mejor depende de la máquina; ver la elección del tamaño más abajo). En lugar de recorrer cada dimensión de punta a punta, se la recorre de a $b$ elementos:
+La idea del *blocking* es operar sobre submatrices ("bloques" o "teselas") lo bastante pequeñas como para que los bloques activos —uno de *A*, uno de *B* y uno de *C*— se reutilicen intensamente desde la caché antes de ser desalojados (qué tamaño es el mejor depende de la máquina; ver la elección del tamaño más abajo). En lugar de recorrer cada dimensión de punta a punta, se la recorre de a $b$ elementos:
 
 ```c
 for (int ii = 0; ii < n; ii += b)          // bloque de filas de C y A
@@ -223,25 +223,25 @@ for (int ii = 0; ii < n; ii += b)          // bloque de filas de C y A
         }
 ```
 
-El orden de los bucles externos (`ii`, `jj`, `kk`) es deliberado: para un bloque de $C$ fijo se recorren todos los valores de `kk` antes de pasar al siguiente, de modo que el bloque de $C$ permanece en caché mientras acumula los aportes de cada par de bloques $A_{ik}\,B_{kj}$.
+El orden de los bucles externos (`ii`, `jj`, `kk`) es deliberado: para un bloque de *C* fijo se recorren todos los valores de `kk` antes de pasar al siguiente, de modo que el bloque de *C* permanece en caché mientras acumula los aportes de cada par de bloques $A_{ik}\,B_{kj}$.
 
 #### Ejemplo numérico con una matriz pequeña
 
 Se usan las matrices de $4 \times 4$ del capítulo 1 con bloques de $2 \times 2$ ($b = 2$). Cada matriz queda dividida en cuatro bloques:
 
 $$
-A = \begin{pmatrix} A_{00} & A_{01} \cr A_{10} & A_{11} \end{pmatrix},\quad
-B = \begin{pmatrix} B_{00} & B_{01} \cr B_{10} & B_{11} \end{pmatrix},\quad
-C = \begin{pmatrix} C_{00} & C_{01} \cr C_{10} & C_{11} \end{pmatrix},
+A = \begin{pmatrix} A_{00} & A_{01} \\ A_{10} & A_{11} \end{pmatrix},\quad
+B = \begin{pmatrix} B_{00} & B_{01} \\ B_{10} & B_{11} \end{pmatrix},\quad
+C = \begin{pmatrix} C_{00} & C_{01} \\ C_{10} & C_{11} \end{pmatrix},
 $$
 
 con
 
 $$
-A_{00}=\begin{pmatrix}1&2 \cr 5&6\end{pmatrix},\;
-A_{01}=\begin{pmatrix}3&4 \cr 7&8\end{pmatrix},\;
-B_{00}=\begin{pmatrix}1&2 \cr 3&1\end{pmatrix},\;
-B_{10}=\begin{pmatrix}2&1 \cr 1&3\end{pmatrix}.
+A_{00}=\begin{pmatrix}1&2 \\ 5&6\end{pmatrix},\;
+A_{01}=\begin{pmatrix}3&4 \\ 7&8\end{pmatrix},\;
+B_{00}=\begin{pmatrix}1&2 \\ 3&1\end{pmatrix},\;
+B_{10}=\begin{pmatrix}2&1 \\ 1&3\end{pmatrix}.
 $$
 
 El producto por bloques sigue la misma regla que el producto de matrices de $2\times 2$, pero con bloques en lugar de números:
@@ -260,24 +260,24 @@ Para el bloque $C_{00}$ el algoritmo hace dos pasos (`kk = 0` y `kk = 2`), mante
 Con los valores numéricos, el paso 0 deja en $C_{00}$
 
 $$
-C_{00} = A_{00} B_{00} = \begin{pmatrix}7&4 \cr 23&16\end{pmatrix}
+C_{00} = A_{00} B_{00} = \begin{pmatrix}7&4 \\ 23&16\end{pmatrix}
 $$
 
 y el paso 1 suma
 
 $$
-A_{01} B_{10} = \begin{pmatrix}10&15 \cr 22&31\end{pmatrix}
+A_{01} B_{10} = \begin{pmatrix}10&15 \\ 22&31\end{pmatrix}
 \quad\Longrightarrow\quad
-C_{00} = \begin{pmatrix}17&19 \cr 45&47\end{pmatrix}.
+C_{00} = \begin{pmatrix}17&19 \\ 45&47\end{pmatrix}.
 $$
 
-El resultado, $C_{00}$, coincide con la esquina superior izquierda de $C$ calculada en el capítulo 1. Repetido para los cuatro bloques de $C$ son $(n/b)^3 = 8$ productos de bloques, cada uno trabajando únicamente sobre $3 \times 4 = 12$ números, que es lo que debe caber en caché en cada momento.
+El resultado, $C_{00}$, coincide con la esquina superior izquierda de *C* calculada en el capítulo 1. Repetido para los cuatro bloques de *C* son $(n/b)^3 = 8$ productos de bloques, cada uno trabajando únicamente sobre $3 \times 4 = 12$ números, que es lo que debe caber en caché en cada momento.
 
-**Por qué reduce el tráfico de memoria.** Con un modelo simplificado en el que un bloque que cabe en caché se carga una sola vez, cada bloque de $B$ se trae $n/b$ veces (una por cada bloque de filas de $A$) en lugar de $n$ veces. En el ejemplo, $B$ se lee 2 veces en lugar de 4; en general, el tráfico de $B$ desde memoria principal se divide por el tamaño del bloque $b$. Cuanto mayor sea $b$, mayor es la reutilización, hasta el límite impuesto por la capacidad de la caché.
+**Por qué reduce el tráfico de memoria.** Con un modelo simplificado en el que un bloque que cabe en caché se carga una sola vez, cada bloque de *B* se trae $n/b$ veces (una por cada bloque de filas de *A*) en lugar de $n$ veces. En el ejemplo, *B* se lee 2 veces en lugar de 4; en general, el tráfico de *B* desde memoria principal se divide por el tamaño del bloque $b$. Cuanto mayor sea $b$, mayor es la reutilización, hasta el límite impuesto por la capacidad de la caché.
 
 #### Elección del tamaño de bloque
 
-El proyecto usa por defecto $b = 64$ (un bloque de $B$ de $64 \times 64$ doubles, 32 KiB), con $b_i = b_k = b_j$. Es un parámetro de compilación (`-DBI`, `-DBK`, `-DBJ`, o `-DBLOQUE` para los tres; ver `src/common/bloque.h`). Una primera versión lo derivaba de la caché L2 de la máquina (los tres bloques activos en la mitad de la L2), pero se abandonó: un barrido de $b$ en dos máquinas distintas mostró que el óptimo depende de la jerarquía de caché de cada una y que una fórmula basada en la L2 no sirve en ambas.
+El proyecto usa por defecto $b = 64$ (un bloque de *B* de $64 \times 64$ doubles, 32 KiB), con $b_i = b_k = b_j$. Es un parámetro de compilación (`-DBI`, `-DBK`, `-DBJ`, o `-DBLOQUE` para los tres; ver `src/common/bloque.h`). Una primera versión lo derivaba de la caché L2 de la máquina (los tres bloques activos en la mitad de la L2), pero se abandonó: un barrido de $b$ en dos máquinas distintas mostró que el óptimo depende de la jerarquía de caché de cada una y que una fórmula basada en la L2 no sirve en ambas.
 
 **Barrido de $b$.** Se midió la versión serial bloqueada con `scripts/barrido_bloque.sh` (5 repeticiones por punto, GFLOPS medios), en dos máquinas:
 
@@ -315,7 +315,7 @@ Lo que muestran los datos:
 - **El tamaño de bloque importa en las dos máquinas.** La diferencia entre el peor y el mejor $b$ es de hasta un 33 % en el servidor (con $n=7500$, de 11,90 a 15,83 GFLOPS) y de hasta un 31 % en el portátil (con $n=1000$, de 20,20 a 29,16).
 - **El óptimo es distinto en cada máquina.** En el servidor hay una meseta entre $b=144$ y $b=192$, con diferencias menores al 1,5 % entre puntos vecinos, que mejora entre un 10 % y un 18 % sobre $b=64$. En el portátil el máximo está en $b=64$ para los tres $n$, y $b \ge 192$ pierde entre un 25 % y un 30 %.
 - **Los extremos no son buenos en ninguna:** $b=32$ reutiliza poco cada bloque, y $b=256$ cae en las dos máquinas.
-- **Una fórmula basada en la L2 no sirve para las dos.** Con una L2 de 512 KiB (servidor) el óptimo cae cerca del 40 % de la L2 para el bloque de $B$; con los 2 MiB de L2 de un núcleo P del portátil, esa misma regla daría $b \approx 320$, peor que 64. Una regla basada en la L1d (32 KiB del bloque de $B$ de $b=64$ entran en los 48 KiB del portátil) acierta en el portátil pero daría $b \approx 48$ en el servidor, por debajo de su meseta. Nuestra hipótesis, que **no se verificó con contadores de caché**, es que el óptimo depende de cómo se combinan los tamaños de L1d y L2 de cada máquina. Por eso se dejó $b=64$ fijo, que además es el valor con el que se midieron todos los benchmarks del informe.
+- **Una fórmula basada en la L2 no sirve para las dos.** Con una L2 de 512 KiB (servidor) el óptimo cae cerca del 40 % de la L2 para el bloque de *B*; con los 2 MiB de L2 de un núcleo P del portátil, esa misma regla daría $b \approx 320$, peor que 64. Una regla basada en la L1d (32 KiB del bloque de *B* de $b=64$ entran en los 48 KiB del portátil) acierta en el portátil pero daría $b \approx 48$ en el servidor, por debajo de su meseta. Nuestra hipótesis, que **no se verificó con contadores de caché**, es que el óptimo depende de cómo se combinan los tamaños de L1d y L2 de cada máquina. Por eso se dejó $b=64$ fijo, que además es el valor con el que se midieron todos los benchmarks del informe.
 
 Limitaciones que hay que tener presentes:
 
@@ -350,7 +350,7 @@ Las tres versiones se midieron en una máquina de **16 cores y 24 GB de RAM**, p
 Se observan tres hechos que confirman la discusión anterior.
 
 1. **El reordenamiento de bucles ya es una mejora considerable** y crece con $n$ (de 2,0 a 5,9 veces), porque a mayor tamaño más se castiga el acceso por columnas.
-2. **`ikj` pierde la mitad de su rendimiento al pasar de $n = 1000$ a $n = 2000$** y luego se estabiliza: es el momento en que $B$ deja de caber en las cachés y el programa queda limitado por la memoria.
+2. **`ikj` pierde la mitad de su rendimiento al pasar de $n = 1000$ a $n = 2000$** y luego se estabiliza: es el momento en que *B* deja de caber en las cachés y el programa queda limitado por la memoria.
 3. **El blocking mantiene el rendimiento prácticamente constante** (entre 25 y 28 GFLOPS) a cualquier tamaño, porque el conjunto de trabajo en caché depende de $b$ y no de $n$. La ganancia sobre `ikj` llega a 4,5 veces y sobre `ijk` a 26,6 veces en $n = 5000$.
 
 Una observación metodológica: en $n = 2000$ la versión bloqueada muestra un desvío grande (barra de error en la figura), señal de interferencia en alguna de las corridas; por eso se usa la mediana y no el promedio.
@@ -371,7 +371,7 @@ El modelo de ejecución es **SPMD** (*Single Program, Multiple Data*): se lanza 
 ### 3.2 Por qué MPI para este trabajo
 
 - **Es el modelo de los clústeres.** Un clúster es un conjunto de nodos con memoria propia conectados por una red; MPI es la forma estándar de programarlos. Un código MPI funciona igual en una PC, en un servidor de muchos cores o en cientos de nodos, cambiando solamente el número de procesos.
-- **Obliga a pensar la partición de datos.** Con memoria compartida (OpenMP) el reparto del trabajo es casi trivial, porque todos los hilos ven las mismas matrices. Con MPI hay que decidir qué porción de $A$, $B$ y $C$ vive en cada proceso y qué hay que enviar, que es precisamente el objeto de estudio de este informe.
+- **Obliga a pensar la partición de datos.** Con memoria compartida (OpenMP) el reparto del trabajo es casi trivial, porque todos los hilos ven las mismas matrices. Con MPI hay que decidir qué porción de *A*, *B* y *C* vive en cada proceso y qué hay que enviar, que es precisamente el objeto de estudio de este informe.
 - **Es la base de las bibliotecas de álgebra lineal distribuida** (ScaLAPACK usa MPI a través de BLACS; SLATE también), por lo que lo aprendido se aplica directamente a ellas.
 
 Aunque OpenBLAS puede paralelizar la multiplicación por sí mismo con hilos, para que la comparación sea objetiva y centrada en la distribución de datos, toda la paralelización de este trabajo se hace con procesos MPI (con un hilo de OpenBLAS por proceso).
@@ -397,9 +397,9 @@ Las funciones se agrupan por su papel. La columna final indica dónde se usan en
 | `MPI_Comm_size` | Cantidad $p$ de procesos del comunicador. | Cálculo de la partición. |
 | `MPI_Comm_rank` | Rank del proceso que llama. | Elegir qué filas procesa cada uno; el rank 0 genera y recolecta. |
 | `MPI_Send` / `MPI_Recv` | Envío y recepción punto a punto, bloqueantes. | Base conceptual de la comunicación punto a punto; no se usan en el núcleo de las versiones 1D. |
-| `MPI_Bcast` | El proceso raíz envía el mismo dato a todos. | Difusión de $B$ completa en la versión 1D; difusión de paneles por filas y columnas en SUMMA. |
-| `MPI_Scatterv` | La raíz reparte porciones **de distinto tamaño** de un arreglo, una a cada proceso. | Reparto de filas de $A$ (cuando $n$ no es múltiplo de $p$). |
-| `MPI_Gatherv` | Inverso de `Scatterv`: la raíz recolecta porciones de distinto tamaño. | Reconstrucción de $C$ en el rank 0. |
+| `MPI_Bcast` | El proceso raíz envía el mismo dato a todos. | Difusión de *B* completa en la versión 1D; difusión de paneles por filas y columnas en SUMMA. |
+| `MPI_Scatterv` | La raíz reparte porciones **de distinto tamaño** de un arreglo, una a cada proceso. | Reparto de filas de *A* (cuando $n$ no es múltiplo de $p$). |
+| `MPI_Gatherv` | Inverso de `Scatterv`: la raíz recolecta porciones de distinto tamaño. | Reconstrucción de *C* en el rank 0. |
 | `MPI_Reduce` | Combina un valor de cada proceso con una operación (suma, máximo…) en la raíz. | Obtener el **máximo** de los tiempos locales (el tiempo de una ejecución paralela es el del proceso más lento). |
 | `MPI_Barrier` | Sincroniza: nadie continúa hasta que todos llegan. | Alinear a todos los procesos antes de empezar a cronometrar. |
 | `MPI_Wtime` | Tiempo de reloj de pared en segundos. | Todas las mediciones. |
@@ -454,7 +454,7 @@ Una precaución al interpretar las mediciones: en este trabajo todos los proceso
 
 ### 4.1 Primera elección: dividir por filas
 
-Entre las estrategias posibles de reparto, la más natural es la **partición 1D por filas**: se divide $A$ en $p$ bloques horizontales de filas consecutivas y se entrega uno a cada proceso. Como la fila $i$ de $C$ depende únicamente de la fila $i$ de $A$ y de **toda** la matriz $B$, cada proceso puede calcular su bloque de filas de $C$ sin intervención de los demás, siempre que disponga de su bloque de $A$ y de $B$ completa:
+Entre las estrategias posibles de reparto, la más natural es la **partición 1D por filas**: se divide *A* en $p$ bloques horizontales de filas consecutivas y se entrega uno a cada proceso. Como la fila $i$ de *C* depende únicamente de la fila $i$ de *A* y de **toda** la matriz *B*, cada proceso puede calcular su bloque de filas de *C* sin intervención de los demás, siempre que disponga de su bloque de *A* y de *B* completa:
 
 ```
         A (reparto por filas)        B (copia completa en todos)      C (filas calculadas por cada uno)
@@ -471,11 +471,11 @@ Es la estrategia que se implementó de forma propia, tanto por su simplicidad co
 
 El algoritmo consta de cinco etapas, todas con comunicaciones colectivas (código en `src/mpi/`):
 
-1. **Generación (rank 0).** El proceso 0 crea $A$ y $B$ completas con una semilla fija.
-2. **Difusión de $B$** a todos los procesos: `MPI_Bcast`.
-3. **Reparto de $A$** por bloques de filas: `MPI_Scatterv`.
-4. **Cómputo local.** Cada proceso multiplica su bloque de filas de $A$ por $B$ y obtiene su bloque de filas de $C$.
-5. **Recolección de $C$** en el rank 0: `MPI_Gatherv`.
+1. **Generación (rank 0).** El proceso 0 crea *A* y *B* completas con una semilla fija.
+2. **Difusión de <i>B</i>** a todos los procesos: `MPI_Bcast`.
+3. **Reparto de <i>A</i>** por bloques de filas: `MPI_Scatterv`.
+4. **Cómputo local.** Cada proceso multiplica su bloque de filas de *A* por *B* y obtiene su bloque de filas de *C*.
+5. **Recolección de <i>C</i>** en el rank 0: `MPI_Gatherv`.
 
 El núcleo cronometrado de la versión bloqueada es:
 
@@ -510,7 +510,7 @@ No se supone que $n$ sea múltiplo de $p$. La función `calcular_particiones` (`
 
 ### 4.3 Aplicación a las versiones seriales anteriores
 
-La partición 1D se aplicó a las tres versiones seriales del capítulo 2. Como el reparto es por filas completas de $A$, el kernel local de cada proceso **es exactamente el kernel serial**, solo que invocado sobre un bloque de filas:
+La partición 1D se aplicó a las tres versiones seriales del capítulo 2. Como el reparto es por filas completas de *A*, el kernel local de cada proceso **es exactamente el kernel serial**, solo que invocado sobre un bloque de filas:
 
 | Versión MPI | Kernel local | Archivo |
 |---|---|---|
@@ -530,22 +530,22 @@ Las matrices se declaran como **arreglos estáticos** (fuera del montón) de tam
 - **Comunicación en pocos mensajes grandes**, que aprovechan bien el ancho de banda (en lugar de muchos mensajes pequeños dominados por la latencia).
 - **Equilibrio de carga perfecto** para matrices densas: todas las filas cuestan lo mismo.
 - **Reutilización directa de los kernels seriales** y de sus optimizaciones de caché.
-- **Localidad en $A$ y $C$:** cada proceso lee y escribe bloques contiguos.
+- **Localidad en *A* y *C*:** cada proceso lee y escribe bloques contiguos.
 
 ### 4.5 Limitaciones
 
-La limitación estructural es que **cada proceso necesita la matriz $B$ completa**: es la contrapartida de no comunicarse durante el cómputo.
+La limitación estructural es que **cada proceso necesita la matriz *B* completa**: es la contrapartida de no comunicarse durante el cómputo.
 
-**1. Memoria (*memory wall*).** Cada proceso almacena $n^2$ elementos de $B$ más $2n^2/p$ de sus porciones de $A$ y $C$. La memoria total ocupada por las copias de $B$ crece linealmente con $p$ y no disminuye al agregar procesos:
+**1. Memoria (*memory wall*).** Cada proceso almacena $n^2$ elementos de *B* más $2n^2/p$ de sus porciones de *A* y *C*. La memoria total ocupada por las copias de *B* crece linealmente con $p$ y no disminuye al agregar procesos:
 
-| $n$ | Tamaño de $B$ (8 bytes/elem.) | Copias con $p=48$ | Copias con 1000 nodos |
+| $n$ | Tamaño de *B* (8 bytes/elem.) | Copias con $p=48$ | Copias con 1000 nodos |
 |--:|--:|--:|--:|
 | 10 000 | 800 MB | 38,4 GB | 800 GB |
 | 100 000 | 80 GB | 3,84 TB | 80 TB |
 
-Con $n = 100\,000$ ni siquiera un nodo con 64 GB podría alojar *una* copia de $B$: la estrategia deja de ser viable por capacidad antes que por velocidad.
+Con $n = 100\,000$ ni siquiera un nodo con 64 GB podría alojar *una* copia de *B*: la estrategia deja de ser viable por capacidad antes que por velocidad.
 
-**2. Volumen de comunicación que no baja con $p$.** Cada proceso recibe $n^2$ elementos de $B$ (más $n^2/p$ de $A$), sin importar cuántos procesos haya. En cambio, el cómputo por proceso sí disminuye: $2n^3/p$ operaciones. La relación entre ambos se degrada al crecer $p$:
+**2. Volumen de comunicación que no baja con $p$.** Cada proceso recibe $n^2$ elementos de *B* (más $n^2/p$ de *A*), sin importar cuántos procesos haya. En cambio, el cómputo por proceso sí disminuye: $2n^3/p$ operaciones. La relación entre ambos se degrada al crecer $p$:
 
 $$
 \frac{\text{cómputo por proceso}}{\text{datos recibidos por proceso}} \;=\; \frac{2n^3/p}{n^2 + n^2/p} \;=\; \frac{2n}{p+1}\ \ \text{operaciones por elemento recibido.}
@@ -566,7 +566,7 @@ Estas limitaciones motivan una distribución en dos dimensiones, donde ningún p
 
 ### 5.1 La distribución 2D como solución a las limitaciones de la 1D
 
-La partición 1D falla porque reparte *una* de las dimensiones y obliga a replicar la otra matriz. La idea de la **distribución 2D** es repartir los datos en las **dos dimensiones a la vez**. Los $p$ procesos se organizan en una grilla virtual de $P_r$ filas y $P_c$ columnas (por ejemplo, 4 procesos en una grilla de $2 \times 2$, como un tablero de ajedrez) y cada matriz se fragmenta en mosaicos o **losetas** (*tiles*). El proceso $(r, c)$ de la grilla es dueño de la loseta $(r, c)$ de $A$, de la de $B$ y de la de $C$:
+La partición 1D falla porque reparte *una* de las dimensiones y obliga a replicar la otra matriz. La idea de la **distribución 2D** es repartir los datos en las **dos dimensiones a la vez**. Los $p$ procesos se organizan en una grilla virtual de $P_r$ filas y $P_c$ columnas (por ejemplo, 4 procesos en una grilla de $2 \times 2$, como un tablero de ajedrez) y cada matriz se fragmenta en mosaicos o **losetas** (*tiles*). El proceso $(r, c)$ de la grilla es dueño de la loseta $(r, c)$ de *A*, de la de *B* y de la de *C*:
 
 ```
                      Columna 0      Columna 1
@@ -585,7 +585,7 @@ Esto resuelve los dos problemas del capítulo anterior.
 
 Desaparece la *memory wall*: matrices que no caben en un nodo caben en el conjunto de la grilla.
 
-**Comunicación.** Un proceso solo necesita, para su loseta de $C$, la franja de filas de $A$ de su fila de la grilla y la franja de columnas de $B$ de su columna de la grilla. Recibe en total $n^2\left(\frac{1}{P_r} + \frac{1}{P_c}\right)$ elementos, que para una grilla casi cuadrada es del orden de $2n^2/\sqrt{p}$. Con $p = 48$ (grilla de $6 \times 8$) cada proceso recibe aproximadamente $0{,}29\,n^2$ elementos, frente a los $1{,}02\,n^2$ de la partición 1D. Y la relación entre cómputo y comunicación mejora de $2n/(p+1)$ a aproximadamente $n/\sqrt{p}$:
+**Comunicación.** Un proceso solo necesita, para su loseta de *C*, la franja de filas de *A* de su fila de la grilla y la franja de columnas de *B* de su columna de la grilla. Recibe en total $n^2\left(\frac{1}{P_r} + \frac{1}{P_c}\right)$ elementos, que para una grilla casi cuadrada es del orden de $2n^2/\sqrt{p}$. Con $p = 48$ (grilla de $6 \times 8$) cada proceso recibe aproximadamente $0{,}29\,n^2$ elementos, frente a los $1{,}02\,n^2$ de la partición 1D. Y la relación entre cómputo y comunicación mejora de $2n/(p+1)$ a aproximadamente $n/\sqrt{p}$:
 
 | $n = 10\,000$, $p = 48$ | Operaciones por elemento recibido |
 |---|--:|
@@ -608,13 +608,13 @@ $$
 C = \sum_{k} A_{\bullet k}\, B_{k \bullet},
 $$
 
-donde $A_{\bullet k}$ es una franja de columnas de $A$ y $B_{k\bullet}$ la franja de filas correspondiente de $B$. SUMMA recorre esa suma en **etapas**. En cada etapa:
+donde $A_{\bullet k}$ es una franja de columnas de *A* y $B_{k\bullet}$ la franja de filas correspondiente de *B*. SUMMA recorre esa suma en **etapas**. En cada etapa:
 
-1. El o los procesos que poseen la franja actual de $A$ la **difunden por su fila** de la grilla (*broadcast* horizontal).
-2. El o los procesos que poseen la franja actual de $B$ la **difunden por su columna** (*broadcast* vertical).
+1. El o los procesos que poseen la franja actual de *A* la **difunden por su fila** de la grilla (*broadcast* horizontal).
+2. El o los procesos que poseen la franja actual de *B* la **difunden por su columna** (*broadcast* vertical).
 3. Cada proceso, con ambas franjas a mano, hace una **actualización local** $C_{local} \mathrel{+}= A_{franja} \times B_{franja}$ con un kernel de multiplicación local.
 
-Cuando se agotaron las franjas, cada proceso tiene su loseta de $C$ completa. Nadie envía nunca datos a toda la grilla; las difusiones son aisladas por fila y por columna, lo que evita la congestión global. La separación de responsabilidades es la siguiente:
+Cuando se agotaron las franjas, cada proceso tiene su loseta de *C* completa. Nadie envía nunca datos a toda la grilla; las difusiones son aisladas por fila y por columna, lo que evita la congestión global. La separación de responsabilidades es la siguiente:
 
 | Componente | Responsabilidad |
 |---|---|
@@ -628,7 +628,7 @@ Se emplean las mismas matrices de $4 \times 4$ de los capítulos anteriores y un
 
 **Distribución inicial.**
 
-| Proceso | Posee de $A$ | Posee de $B$ | Debe calcular |
+| Proceso | Posee de *A* | Posee de *B* | Debe calcular |
 |---|---|---|---|
 | P(0,0) | $A_{00}$ | $B_{00}$ | $C_{00}$ |
 | P(0,1) | $A_{01}$ | $B_{01}$ | $C_{01}$ |
@@ -638,17 +638,17 @@ Se emplean las mismas matrices de $4 \times 4$ de los capítulos anteriores y un
 Los valores de las losetas son
 
 $$
-A_{00}=\begin{pmatrix}1&2 \cr 5&6\end{pmatrix},\quad
-A_{01}=\begin{pmatrix}3&4 \cr 7&8\end{pmatrix},\quad
-A_{10}=\begin{pmatrix}9&10 \cr 13&14\end{pmatrix},\quad
-A_{11}=\begin{pmatrix}11&12 \cr 15&16\end{pmatrix},
+A_{00}=\begin{pmatrix}1&2 \\ 5&6\end{pmatrix},\quad
+A_{01}=\begin{pmatrix}3&4 \\ 7&8\end{pmatrix},\quad
+A_{10}=\begin{pmatrix}9&10 \\ 13&14\end{pmatrix},\quad
+A_{11}=\begin{pmatrix}11&12 \\ 15&16\end{pmatrix},
 $$
 
 $$
-B_{00}=\begin{pmatrix}1&2 \cr 3&1\end{pmatrix},\quad
-B_{01}=\begin{pmatrix}3&1 \cr 2&3\end{pmatrix},\quad
-B_{10}=\begin{pmatrix}2&1 \cr 1&3\end{pmatrix},\quad
-B_{11}=\begin{pmatrix}1&2 \cr 2&1\end{pmatrix}.
+B_{00}=\begin{pmatrix}1&2 \\ 3&1\end{pmatrix},\quad
+B_{01}=\begin{pmatrix}3&1 \\ 2&3\end{pmatrix},\quad
+B_{10}=\begin{pmatrix}2&1 \\ 1&3\end{pmatrix},\quad
+B_{11}=\begin{pmatrix}1&2 \\ 2&1\end{pmatrix}.
 $$
 
 Tener esas losetas no basta. Por ejemplo, P(0,0) debe calcular
@@ -661,8 +661,8 @@ pero solo dispone de $A_{00}$ y $B_{00}$: le faltan $A_{01}$ (que está en su ve
 
 **Etapa 1 (franja $k = 0$).**
 
-- *Difusión de $A$ por filas:* P(0,0) difunde $A_{00}$ a P(0,1); P(1,0) difunde $A_{10}$ a P(1,1).
-- *Difusión de $B$ por columnas:* P(0,0) difunde $B_{00}$ a P(1,0); P(0,1) difunde $B_{01}$ a P(1,1).
+- *Difusión de *A* por filas:* P(0,0) difunde $A_{00}$ a P(0,1); P(1,0) difunde $A_{10}$ a P(1,1).
+- *Difusión de *B* por columnas:* P(0,0) difunde $B_{00}$ a P(1,0); P(0,1) difunde $B_{01}$ a P(1,1).
 - *Actualización local:*
 
 | Proceso | Operación |
@@ -675,16 +675,16 @@ pero solo dispone de $A_{00}$ y $B_{00}$: le faltan $A_{01}$ (que está en su ve
 Acumulado después de la etapa 1:
 
 $$
-C_{00}=\begin{pmatrix}7&4 \cr 23&16\end{pmatrix},\quad
-C_{01}=\begin{pmatrix}7&7 \cr 27&23\end{pmatrix},\quad
-C_{10}=\begin{pmatrix}39&28 \cr 55&40\end{pmatrix},\quad
-C_{11}=\begin{pmatrix}47&39 \cr 67&55\end{pmatrix}.
+C_{00}=\begin{pmatrix}7&4 \\ 23&16\end{pmatrix},\quad
+C_{01}=\begin{pmatrix}7&7 \\ 27&23\end{pmatrix},\quad
+C_{10}=\begin{pmatrix}39&28 \\ 55&40\end{pmatrix},\quad
+C_{11}=\begin{pmatrix}47&39 \\ 67&55\end{pmatrix}.
 $$
 
 **Etapa 2 (franja $k = 1$).** Cambian los propietarios que difunden:
 
-- *Difusión de $A$ por filas:* P(0,1) difunde $A_{01}$ a P(0,0); P(1,1) difunde $A_{11}$ a P(1,0).
-- *Difusión de $B$ por columnas:* P(1,0) difunde $B_{10}$ a P(0,0); P(1,1) difunde $B_{11}$ a P(0,1).
+- *Difusión de *A* por filas:* P(0,1) difunde $A_{01}$ a P(0,0); P(1,1) difunde $A_{11}$ a P(1,0).
+- *Difusión de *B* por columnas:* P(1,0) difunde $B_{10}$ a P(0,0); P(1,1) difunde $B_{11}$ a P(0,1).
 - *Actualización local:*
 
 | Proceso | Operación |
@@ -697,25 +697,25 @@ $$
 Aporte de la etapa 2 a cada acumulador:
 
 $$
-A_{01}B_{10}=\begin{pmatrix}10&15 \cr 22&31\end{pmatrix},\quad
-A_{01}B_{11}=\begin{pmatrix}11&10 \cr 23&22\end{pmatrix},\quad
-A_{11}B_{10}=\begin{pmatrix}34&47 \cr 46&63\end{pmatrix},\quad
-A_{11}B_{11}=\begin{pmatrix}35&34 \cr 47&46\end{pmatrix}.
+A_{01}B_{10}=\begin{pmatrix}10&15 \\ 22&31\end{pmatrix},\quad
+A_{01}B_{11}=\begin{pmatrix}11&10 \\ 23&22\end{pmatrix},\quad
+A_{11}B_{10}=\begin{pmatrix}34&47 \\ 46&63\end{pmatrix},\quad
+A_{11}B_{11}=\begin{pmatrix}35&34 \\ 47&46\end{pmatrix}.
 $$
 
 Resultado final de cada proceso:
 
 $$
-C_{00}=\begin{pmatrix}17&19 \cr 45&47\end{pmatrix},\quad
-C_{01}=\begin{pmatrix}18&17 \cr 50&45\end{pmatrix},\quad
-C_{10}=\begin{pmatrix}73&75 \cr 101&103\end{pmatrix},\quad
-C_{11}=\begin{pmatrix}82&73 \cr 114&101\end{pmatrix}.
+C_{00}=\begin{pmatrix}17&19 \\ 45&47\end{pmatrix},\quad
+C_{01}=\begin{pmatrix}18&17 \\ 50&45\end{pmatrix},\quad
+C_{10}=\begin{pmatrix}73&75 \\ 101&103\end{pmatrix},\quad
+C_{11}=\begin{pmatrix}82&73 \\ 114&101\end{pmatrix}.
 $$
 
 **Resultado.** Al reunir las cuatro losetas se obtiene
 
 $$
-C = \begin{pmatrix} 17 & 19 & 18 & 17 \cr 45 & 47 & 50 & 45 \cr 73 & 75 & 82 & 73 \cr 101 & 103 & 114 & 101 \end{pmatrix},
+C = \begin{pmatrix} 17 & 19 & 18 & 17 \\ 45 & 47 & 50 & 45 \\ 73 & 75 & 82 & 73 \\ 101 & 103 & 114 & 101 \end{pmatrix},
 $$
 
 idéntica a la calculada en el capítulo 1. Cada proceso terminó su propia loseta sin necesidad de sumar bloques de procesos distintos: los $C_{ij}$ ocupan regiones diferentes de la matriz final, no contribuciones superpuestas.
@@ -724,7 +724,7 @@ Con $P_r = P_c = 2$ la dimensión compartida se recorre en dos etapas. En genera
 
 #### Relación con el algoritmo de Cannon
 
-Una alternativa histórica es el algoritmo de **Cannon** (1969). En vez de difundir, los bloques *rotan*: tras un alineamiento inicial, en cada paso todos los bloques de $A$ se desplazan una posición hacia la izquierda y los de $B$ una hacia arriba, como engranajes de un reloj, y cada proceso multiplica los dos bloques que le llegan. El uso de la red es constante y predecible, pero requiere una grilla cuadrada y es más rígido frente a matrices rectangulares. SUMMA es más general y es el que adoptaron las bibliotecas.
+Una alternativa histórica es el algoritmo de **Cannon** (1969). En vez de difundir, los bloques *rotan*: tras un alineamiento inicial, en cada paso todos los bloques de *A* se desplazan una posición hacia la izquierda y los de *B* una hacia arriba, como engranajes de un reloj, y cada proceso multiplica los dos bloques que le llegan. El uso de la red es constante y predecible, pero requiere una grilla cuadrada y es más rígido frente a matrices rectangulares. SUMMA es más general y es el que adoptaron las bibliotecas.
 
 ### 5.3 Alcance del proyecto: la implementación propia
 
@@ -771,26 +771,26 @@ El programa `src/ref/matmul_pdgemm.c` multiplica $C = A B$ con `PDGEMM`. La tabl
 | `Cblacs_get` | Obtiene valores internos de BLACS; con `what=0`, el contexto por defecto. | Prepara la creación de las grillas. |
 | `Cblacs_gridinit` | Mapea los procesos en una grilla $P_r \times P_c$ y devuelve el contexto. | Crea la **grilla 2D** de SUMMA. El programa crea dos: la 2D y una $1\times1$ donde la raíz guarda las matrices completas. |
 | `Cblacs_gridinfo` | Devuelve $P_r$, $P_c$ y las coordenadas del proceso. | Posición $(r, c)$ de cada proceso: de ahí salen "mi fila" y "mi columna" para las difusiones. |
-| `numroc_` | Calcula cuántas filas o columnas de una matriz distribuida posee un proceso. | Tamaño de las losetas locales de $A$, $B$ y $C$. |
-| `descinit_` | Inicializa el **descriptor** de una matriz distribuida (dimensiones, tamaño de bloque, contexto, *leading dimension*). | Describe la distribución *block-cyclic* de $A$, $B$ y $C$: precondición de SUMMA. |
-| `pdgemr2d_` | Copia una matriz entre dos distribuciones distintas (otra grilla u otro tamaño de bloque). | **No forma parte de SUMMA:** reparte $A$ y $B$ desde la raíz a la grilla 2D antes del producto, y recolecta $C$ después. Equivale al `Scatter`/`Gather` de la versión 1D. |
+| `numroc_` | Calcula cuántas filas o columnas de una matriz distribuida posee un proceso. | Tamaño de las losetas locales de *A*, *B* y *C*. |
+| `descinit_` | Inicializa el **descriptor** de una matriz distribuida (dimensiones, tamaño de bloque, contexto, *leading dimension*). | Describe la distribución *block-cyclic* de *A*, *B* y *C*: precondición de SUMMA. |
+| `pdgemr2d_` | Copia una matriz entre dos distribuciones distintas (otra grilla u otro tamaño de bloque). | **No forma parte de SUMMA:** reparte *A* y *B* desde la raíz a la grilla 2D antes del producto, y recolecta *C* después. Equivale al `Scatter`/`Gather` de la versión 1D. |
 | `pdgemm_` | $C := \alpha\, \mathrm{op}(A)\,\mathrm{op}(B) + \beta\, C$ sobre matrices distribuidas. | **Todo el algoritmo tipo SUMMA** (ver 6.3). |
 | `Cblacs_gridexit` / `Cblacs_exit` | Liberan contextos y memoria de BLACS. | Limpieza. |
 
-El flujo medido en cada repetición es: redistribución de $A$ y $B$ (`pdgemr2d_`), producto (`pdgemm_`) y recolección de $C$ (`pdgemr2d_`), con el tiempo máximo entre procesos obtenido por `MPI_Reduce`.
+El flujo medido en cada repetición es: redistribución de *A* y *B* (`pdgemr2d_`), producto (`pdgemm_`) y recolección de *C* (`pdgemr2d_`), con el tiempo máximo entre procesos obtenido por `MPI_Reduce`.
 
 ### 6.3 Qué ocurre dentro de `PDGEMM`
 
 Según el código fuente de PBLAS, `pdgemm_` procede así:
 
-1. **Elección de variante.** Estima el costo de comunicación de tres variantes (`AB`, `BC` y `AC`, según qué operandos se comuniquen) y usa la mejor. La variante `AB`, en la que se comunican $A$ y $B$ y se deja $C$ en su sitio, es la que corresponde al esquema de SUMMA descrito en el capítulo 5. *(No se verificó cuál elige para el problema del proyecto.)*
+1. **Elección de variante.** Estima el costo de comunicación de tres variantes (`AB`, `BC` y `AC`, según qué operandos se comuniquen) y usa la mejor. La variante `AB`, en la que se comunican *A* y *B* y se deja *C* en su sitio, es la que corresponde al esquema de SUMMA descrito en el capítulo 5. *(No se verificó cuál elige para el problema del proyecto.)*
 2. **Topología de difusión.** Si las dimensiones superan el tamaño de bloque lógico, fuerza una topología **en anillo** para las difusiones por fila y por columna: el equivalente del algoritmo *pipelined* de SUMMA.
 3. **Tamaño de panel.** $k_b = 32$ en la versión de referencia para doble precisión (el $n_b$ de SUMMA).
 4. **Bucle sobre paneles**, `for (k = 0; k < K; k += kb)`, y por cada panel:
-   - **Empaquetado**: si las columnas de $A$ (o las filas de $B$) del panel no son contiguas en memoria, las copia a un buffer.
-   - **Difusión** del panel de $A$ por la fila y del panel de $B$ por la columna (primitivas de difusión de BLACS), que dejan el panel replicado en buffers de trabajo.
-   - **Actualización local**: llama a `DGEMM` sobre la porción local de $C$.
-5. Si $A$ y $B$ no abarcan más de una fila o una columna de procesos, se omite el empaquetado y se hace una sola llamada a `DGEMM`.
+   - **Empaquetado**: si las columnas de *A* (o las filas de *B*) del panel no son contiguas en memoria, las copia a un buffer.
+   - **Difusión** del panel de *A* por la fila y del panel de *B* por la columna (primitivas de difusión de BLACS), que dejan el panel replicado en buffers de trabajo.
+   - **Actualización local**: llama a `DGEMM` sobre la porción local de *C*.
+5. Si *A* y *B* no abarcan más de una fila o una columna de procesos, se omite el empaquetado y se hace una sola llamada a `DGEMM`.
 
 ### 6.4 Optimizaciones que incorpora
 
@@ -820,7 +820,7 @@ Es el motivo por el cual, incluso con un solo proceso, `PDGEMM` rinde 47 GFLOPS 
 ScaLAPACK hereda de Fortran el orden ***column-major***: los elementos de una **columna** son consecutivos en memoria. En C, en cambio, las matrices son *row-major*. Para una matriz de 2 filas y 3 columnas
 
 $$
-\begin{pmatrix}1&2&3\cr4&5&6\end{pmatrix}
+\begin{pmatrix}1&2&3\\4&5&6\end{pmatrix}
 $$
 
 la memoria queda así:
@@ -837,28 +837,28 @@ la memoria queda así:
 
 1. *Los mismos números admiten dos lecturas.* La memoria `1 2 3 4 5 6` leída por filas (C) es
 
-   $$
-   \begin{pmatrix}1&2&3\cr4&5&6\end{pmatrix}
-   $$
+$$
+\begin{pmatrix}1&2&3\\4&5&6\end{pmatrix}
+$$
 
-   y leída por columnas (ScaLAPACK) es
+y leída por columnas (ScaLAPACK) es
 
-   $$
-   \begin{pmatrix}1&4\cr2&5\cr3&6\end{pmatrix},
-   $$
+$$
+\begin{pmatrix}1&4\\2&5\\3&6\end{pmatrix},
+$$
 
-   la **transpuesta**. No se movió ningún dato: solo cambió la forma de leerlos. Esto vale para $A$, $B$ y $C$.
+la **transpuesta**. No se movió ningún dato: solo cambió la forma de leerlos. Esto vale para *A*, *B* y *C*.
 2. *La transpuesta de un producto invierte el orden:* $(AB)^T = B^T A^T$.
 
-Lo que ScaLAPACK "ve" son $A^T$, $B^T$ y $C^T$. Entonces, en lugar de pedirle $C = AB$, se le pide lo equivalente en su mundo: **multiplicar lo que ve como $B^T$ por lo que ve como $A^T$ y guardar el resultado en lo que ve como $C^T$**. ScaLAPACK escribe $C^T$ en column-major y esa misma memoria, leída en row-major, es $C$. Dicho de otro modo, ScaLAPACK calcula la **transpuesta del resultado**, y esa transpuesta, leída en row-major, **es exactamente la matriz $C$ buscada**, sin ningún movimiento de datos.
+Lo que ScaLAPACK "ve" son $A^T$, $B^T$ y $C^T$. Entonces, en lugar de pedirle $C = AB$, se le pide lo equivalente en su mundo: **multiplicar lo que ve como $B^T$ por lo que ve como $A^T$ y guardar el resultado en lo que ve como $C^T$**. ScaLAPACK escribe $C^T$ en column-major y esa misma memoria, leída en row-major, es *C*. Dicho de otro modo, ScaLAPACK calcula la **transpuesta del resultado**, y esa transpuesta, leída en row-major, **es exactamente la matriz *C* buscada**, sin ningún movimiento de datos.
 
 | Matriz | Dimensiones reales (row-major) | Dimensiones declaradas (column-major) |
 |---|---|---|
-| $A$ | $N \times M$ | $M \times N$ |
-| $B$ | $M \times P$ | $P \times M$ |
-| $C$ | $N \times P$ | $P \times N$ |
+| *A* | $N \times M$ | $M \times N$ |
+| *B* | $M \times P$ | $P \times M$ |
+| *C* | $N \times P$ | $P \times N$ |
 
-En la llamada a `pdgemm_` el primer operando es $B$ y el segundo $A$ (orden invertido), con $m = P$, $n = N$ y $k = M$. Los únicos cambios respecto de una llamada normal son las dimensiones transpuestas y el orden inverso de los operandos; **los datos nunca se tocan**. Se verificó la corrección con matrices enteras contra la versión serial (`scripts/test_matriz_conocida.sh`), con distintos tamaños de bloque y entre 1 y 8 procesos.
+En la llamada a `pdgemm_` el primer operando es *B* y el segundo *A* (orden invertido), con $m = P$, $n = N$ y $k = M$. Los únicos cambios respecto de una llamada normal son las dimensiones transpuestas y el orden inverso de los operandos; **los datos nunca se tocan**. Se verificó la corrección con matrices enteras contra la versión serial (`scripts/test_matriz_conocida.sh`), con distintos tamaños de bloque y entre 1 y 8 procesos.
 
 
 ---
@@ -871,55 +871,87 @@ Se midieron las tres implementaciones paralelas —`ikj` 1D, `ikj` con blocking 
 
 | Métrica | Definición | Qué mide |
 |---|---|---|
-| Speedup relativo | $S_{rel}(p) = T(1)/T(p)$ | Escalado del propio algoritmo, aislando el costo de la infraestructura MPI. |
 | Speedup absoluto | $S_{abs}(p) = T_{ser}/T(p)$ | Ganancia real frente a la mejor solución no paralela. |
-| Eficiencia | $E(p) = S_{rel}(p)/p$ | Fracción del speedup ideal que se logra. |
+| Speedup relativo | $S_{rel}(p) = T(1)/T(p)$ | Escalado del propio algoritmo, aislando el costo de la infraestructura MPI. |
+| Eficiencia relativa / absoluta | $E_{rel}(p) = S_{rel}(p)/p$, $E_{abs}(p) = S_{abs}(p)/p$ | Fracción del speedup ideal que se logra, medida contra la base de $p=1$ del propio algoritmo o contra el mejor serial. |
 | Fracción serial experimental (Karp-Flatt) | $e(p) = \dfrac{1/S - 1/p}{1 - 1/p}$ | Parte "no paralelizable" aparente que explica el speedup observado. |
 | Sobrecosto paralelo | $T(p) - T(1)/p$ | Tiempo perdido respecto del escalado ideal del propio algoritmo. |
 
-A menos que se indique lo contrario, $S$ y $E$ en las tablas son relativos al propio algoritmo con $p = 1$. Esto es importante para `PDGEMM`: como su base ($p=1$) ya es muy rápida (usa OpenBLAS), su eficiencia relativa parece baja aunque su tiempo absoluto sea el mejor.
+**El speedup absoluto es la métrica principal de este análisis y el relativo es complementario.** Responden preguntas distintas:
+
+- **Absoluto, $S_{abs} = T_{ser}/T(p)$:** ¿cuánto más rápido que la mejor solución no paralela es esta implementación con $p$ procesos? Usa **la misma base para todas** (el mejor serial, `ikj` con blocking), por lo que es la única métrica que permite comparar implementaciones entre sí.
+- **Relativo, $S_{rel} = T(1)/T(p)$:** ¿qué tan bien escala esta implementación respecto de sí misma? Cada implementación usa **su propia base**, así que sus valores no son comparables entre implementaciones. Sirve para diagnosticar el escalado (Amdahl, Karp-Flatt, sobrecosto), no para decir cuál es mejor.
+
+**Por qué los dos difieren tanto.** Los dos speedups se relacionan por un factor que depende solo de la implementación y del tamaño, la *ventaja de base*:
+
+$$S_{abs}(p) = S_{rel}(p)\cdot \frac{T_{ser}}{T(1)}$$
+
+Ese cociente $T_{ser}/T(1)$ mide cuánto más rápida (o lenta) que el serial es la implementación ya con un solo proceso, es decir, la calidad de su kernel local. Vale lo siguiente en el equipo de 48 cores:
+
+| Implementación | $T_{ser}/T(1)$, $n=10\,000$ | $S_{rel}(48)$ | $S_{abs}(48)$ | $T_{ser}/T(1)$, $n=1000$ | $S_{rel}(48)$ | $S_{abs}(48)$ |
+|---|--:|--:|--:|--:|--:|--:|
+| `ikj` 1D | 0,43 | 4,25 | 1,84 | 1,27 | 1,65 | 2,09 |
+| `ikj` blocking 1D | 1,02 | 22,94 | 23,44 | 1,01 | 10,12 | 10,23 |
+| `PDGEMM` 2D | 3,47 | 7,31 | 25,36 | 2,54 | 3,86 | 9,80 |
+
+Hay tres consecuencias:
+
+1. **Para `ikj` con blocking los dos speedups casi coinciden**, porque con un proceso ya es esencialmente el código serial (factor $\approx 1$).
+2. **`PDGEMM` parece mediocre en relativo (7,3) y es el mejor en absoluto (25,4).** Su kernel local (OpenBLAS) es 3,5 veces más rápido que el serial, de modo que con $p=1$ ya tiene una ventaja que el speedup relativo descarta. Su escalado relativo es modesto porque parte de una base ya muy rápida, pero su tiempo con 48 procesos sigue siendo el menor. Concluir que "escala mal, por lo tanto es peor" sería un error causado por la métrica.
+3. **`ikj` sin blocking muestra un speedup relativo de 4,25 y uno absoluto de 1,84**: su base es peor que el serial (0,43), así que el relativo exagera su ganancia real. Con 48 procesos apenas duplica el rendimiento del mejor serial.
+
+Por eso cada resultado de este capítulo se informa con el speedup absoluto cuando se compara entre implementaciones, y con el relativo cuando se estudia cómo escala cada una. La eficiencia de las tablas es la relativa $E_{rel}$ (la absoluta se muestra en la figura 7.2a).
 
 ### 7.2 Panorama general
 
+![Speedup absoluto en función de p](img/speedup_abs_vs_p.png)
+
+*Figura 7.1a. Speedup absoluto ($T_{ser}/T(p)$, con $T_{ser}$ el mejor serial, `ikj` con blocking) en función de $p$. Todas las curvas comparten la misma base, por lo que son directamente comparables entre sí. Con $p=1$ el valor de `PDGEMM` ya es 3,5 (n = 10 000), 2,5 (n = 1000), y por eso en la figura 7.1b parece escalar peor.*
+
 ![Speedup en función de p](img/speedup_vs_p.png)
 
-*Figura 7.1. Speedup relativo en función de $p$ para tres tamaños. La línea punteada es el speedup ideal $S = p$.*
+*Figura 7.1b. Speedup relativo ($T(1)/T(p)$ del propio algoritmo; complementario: mide escalado, no permite comparar implementaciones) en función de $p$ para tres tamaños. La línea punteada es el speedup ideal $S = p$.*
+
+![Eficiencia absoluta en función de p](img/eficiencia_abs_vs_p.png)
+
+*Figura 7.2a. Eficiencia absoluta ($S_{abs}/p$) en función de $p$. Puede superar 1 porque la base es un serial y no la propia implementación (en `PDGEMM`, por la mayor velocidad de su kernel local).*
 
 ![Eficiencia en función de p](img/eficiencia_vs_p.png)
 
-*Figura 7.2. Eficiencia en función de $p$.*
+*Figura 7.2b. Eficiencia relativa en función de $p$.*
 
 **Tabla 7.1.** Resultados para $n = 10\,000$ (la matriz más grande):
 
-| $p$ | `ikj` 1D: $T$ (s) | $S$ | $E$ | `ikj` blocking 1D: $T$ (s) | $S$ | $E$ | PDGEMM 2D: $T$ (s) | $S$ | $E$ |
-|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| 1 | 333,2 | 1,00 | 1,00 | 141,2 | 1,00 | 1,00 | 41,58 | 1,00 | 1,00 |
-| 2 | 216,4 | 1,54 | 0,77 | 72,34 | 1,95 | 0,98 | 25,84 | 1,61 | 0,80 |
-| 4 | 214,9 | 1,55 | 0,39 | 36,99 | 3,82 | 0,95 | 15,31 | 2,72 | 0,68 |
-| 8 | 214,2 | 1,56 | 0,19 | 19,24 | 7,34 | 0,92 | 14,79 | 2,81 | 0,35 |
-| 16 | 115,2 | 2,89 | 0,18 | 10,35 | 13,65 | 0,85 | 8,767 | 4,74 | 0,30 |
-| 24 | 81,82 | 4,07 | 0,17 | 8,174 | 17,28 | 0,72 | 7,127 | 5,83 | 0,24 |
-| 32 | 81,76 | 4,08 | 0,13 | 6,599 | 21,40 | 0,67 | 6,182 | 6,73 | 0,21 |
-| 48 | 78,32 | 4,25 | 0,09 | 6,157 | 22,94 | 0,48 | 5,689 | 7,31 | 0,15 |
+| $p$ | `ikj` 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | `ikj` blocking 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | PDGEMM 2D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ |
+|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| 1 | 333,2 | 0,43 | 1,00 | 1,00 | 141,2 | 1,02 | 1,00 | 1,00 | 41,58 | 3,47 | 1,00 | 1,00 |
+| 2 | 216,4 | 0,67 | 1,54 | 0,77 | 72,34 | 1,99 | 1,95 | 0,98 | 25,84 | 5,59 | 1,61 | 0,80 |
+| 4 | 214,9 | 0,67 | 1,55 | 0,39 | 36,99 | 3,90 | 3,82 | 0,95 | 15,31 | 9,43 | 2,72 | 0,68 |
+| 8 | 214,2 | 0,67 | 1,56 | 0,19 | 19,24 | 7,50 | 7,34 | 0,92 | 14,79 | 9,76 | 2,81 | 0,35 |
+| 16 | 115,2 | 1,25 | 2,89 | 0,18 | 10,35 | 13,95 | 13,65 | 0,85 | 8,767 | 16,46 | 4,74 | 0,30 |
+| 24 | 81,82 | 1,76 | 4,07 | 0,17 | 8,174 | 17,65 | 17,28 | 0,72 | 7,127 | 20,25 | 5,83 | 0,24 |
+| 32 | 81,76 | 1,76 | 4,08 | 0,13 | 6,599 | 21,87 | 21,40 | 0,67 | 6,182 | 23,34 | 6,73 | 0,21 |
+| 48 | 78,32 | 1,84 | 4,25 | 0,09 | 6,157 | 23,44 | 22,94 | 0,48 | 5,689 | 25,36 | 7,31 | 0,15 |
 
 **Tabla 7.2.** Resultados para $n = 1000$:
 
-| $p$ | `ikj` 1D: $T$ (s) | $S$ | $E$ | `ikj` blocking 1D: $T$ (s) | $S$ | $E$ | PDGEMM 2D: $T$ (s) | $S$ | $E$ |
-|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| 1 | 0,107 | 1,00 | 1,00 | 0,134 | 1,00 | 1,00 | 0,053 | 1,00 | 1,00 |
-| 2 | 0,067 | 1,60 | 0,80 | 0,071 | 1,89 | 0,95 | 0,052 | 1,03 | 0,52 |
-| 4 | 0,216 | 0,49 | 0,12 | 0,038 | 3,48 | 0,87 | 0,029 | 1,81 | 0,45 |
-| 8 | 0,220 | 0,49 | 0,06 | 0,022 | 6,06 | 0,76 | 0,017 | 3,15 | 0,39 |
-| 16 | 0,123 | 0,86 | 0,05 | 0,017 | 7,78 | 0,49 | 0,013 | 4,10 | 0,26 |
-| 24 | 0,091 | 1,17 | 0,05 | 0,017 | 7,89 | 0,33 | 0,014 | 3,93 | 0,16 |
-| 32 | 0,071 | 1,50 | 0,05 | 0,012 | 11,00 | 0,34 | 0,014 | 3,90 | 0,12 |
-| 48 | 0,065 | 1,65 | 0,03 | 0,013 | 10,12 | 0,21 | 0,014 | 3,86 | 0,08 |
+| $p$ | `ikj` 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | `ikj` blocking 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | PDGEMM 2D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ |
+|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| 1 | 0,107 | 1,27 | 1,00 | 1,00 | 0,134 | 1,01 | 1,00 | 1,00 | 0,053 | 2,54 | 1,00 | 1,00 |
+| 2 | 0,067 | 2,03 | 1,60 | 0,80 | 0,071 | 1,92 | 1,89 | 0,95 | 0,052 | 2,62 | 1,03 | 0,52 |
+| 4 | 0,216 | 0,63 | 0,49 | 0,12 | 0,038 | 3,52 | 3,48 | 0,87 | 0,029 | 4,60 | 1,81 | 0,45 |
+| 8 | 0,220 | 0,62 | 0,49 | 0,06 | 0,022 | 6,12 | 6,06 | 0,76 | 0,017 | 8,00 | 3,15 | 0,39 |
+| 16 | 0,123 | 1,10 | 0,86 | 0,05 | 0,017 | 7,87 | 7,78 | 0,49 | 0,013 | 10,41 | 4,10 | 0,26 |
+| 24 | 0,091 | 1,49 | 1,17 | 0,05 | 0,017 | 7,98 | 7,89 | 0,33 | 0,014 | 9,97 | 3,93 | 0,16 |
+| 32 | 0,071 | 1,91 | 1,50 | 0,05 | 0,012 | 11,12 | 11,00 | 0,34 | 0,014 | 9,90 | 3,90 | 0,12 |
+| 48 | 0,065 | 2,09 | 1,65 | 0,03 | 0,013 | 10,23 | 10,12 | 0,21 | 0,014 | 9,80 | 3,86 | 0,08 |
 
 Los hechos más notables son los siguientes.
 
-- **La versión 1D con blocking escala bien.** Para $n = 10\,000$ la eficiencia es 0,98 con 2 procesos, 0,85 con 16 y 0,48 con 48, con un speedup de 22,9 (23,4 sobre el mejor serial) y 325 GFLOPS frente a los 14 de un proceso.
-- **La versión 1D sin blocking casi no escala.** Con $n = 10\,000$ el tiempo no cambia entre $p = 2$ y $p = 8$ (216,4 s a 214,2 s) y llega a un speedup de apenas 4,25 con 48 procesos. Es una consecuencia de lo visto en el capítulo 2: `ikj` es una versión limitada por el ancho de banda de memoria, y varios procesos que leen $B$ a la vez saturan ese recurso compartido sin cómputo adicional que lo compense. *(Es una interpretación consistente con los datos; no se midió la ocupación del bus de memoria ni la topología NUMA.)* Un dato elocuente: `ikj` bloqueado con **2 procesos** (72,3 s) es más rápido que `ikj` sin blocking con **48** (78,3 s).
+- **La versión 1D con blocking escala bien.** Para $n = 10\,000$ la eficiencia es 0,98 con 2 procesos, 0,85 con 16 y 0,48 con 48, con un speedup relativo de 22,9 (23,4 absoluto) y 325 GFLOPS frente a los 14 de un proceso.
+- **La versión 1D sin blocking casi no escala.** Con $n = 10\,000$ el tiempo no cambia entre $p = 2$ y $p = 8$ (216,4 s a 214,2 s) y llega a un speedup de apenas 4,25 con 48 procesos. Es una consecuencia de lo visto en el capítulo 2: `ikj` es una versión limitada por el ancho de banda de memoria, y varios procesos que leen *B* a la vez saturan ese recurso compartido sin cómputo adicional que lo compense. *(Es una interpretación consistente con los datos; no se midió la ocupación del bus de memoria ni la topología NUMA.)* Un dato elocuente: `ikj` bloqueado con **2 procesos** (72,3 s) es más rápido que `ikj` sin blocking con **48** (78,3 s).
 - **Un resultado anómalo reproducible.** Con $n = 1000$ la versión `ikj` 1D tarda más con 4 procesos (0,216 s) que con 2 (0,067 s), y su speedup queda por debajo de 1 hasta $p = 16$. Las repeticiones son muy estables (desviación relativa menor al 1 %), por lo que no es ruido; con los datos disponibles no se pudo identificar la causa, ya que no se cronometraron las fases por separado.
+- **Medido contra el mejor serial, `PDGEMM` supera a la versión 1D con blocking en casi todos los $p$.** Con $n = 10\,000$ su speedup absoluto es 5,6 con 2 procesos (1,99 el 1D bloqueado) y 25,4 con 48 (23,4); con $n = 1000$ lo supera hasta $p = 24$ y queda por debajo con $p = 32$ y $48$ (9,8 frente a 11,1 y 10,2). El speedup relativo de `PDGEMM` (7,3 con 48 procesos) hacía parecer lo contrario, porque su base con un proceso ya es 3,5 veces más rápida que el serial. Eso no indica una peor implementación sino un mejor kernel local.
 - **`PDGEMM` es el más rápido en términos absolutos** en la mayoría de los tamaños medianos y grandes: con 48 procesos llega a 476 GFLOPS ($n = 5000$) y a 352 GFLOPS ($n = 10\,000$), aunque sus ganancias relativas son modestas porque parte de una base muy rápida.
 
 ### 7.3 La ley de Amdahl y la fracción no paralelizable
@@ -933,12 +965,12 @@ $$
 Aunque el cómputo de matrices sea embarazosamente paralelo en su núcleo, el programa completo tiene componentes que **no se dividen** con $p$ y actúan como fracción serial o de sobrecosto:
 
 1. **La generación de las matrices.** En las versiones 1D la crea íntegramente el rank 0.
-2. **La comunicación**: la difusión de $B$ completa (que recibe cada proceso), y el reparto y recolección que pasan por el rank 0.
+2. **La comunicación**: la difusión de *B* completa (que recibe cada proceso), y el reparto y recolección que pasan por el rank 0.
 3. **La contención** por recursos compartidos (memoria).
 
 #### La generación serial
 
-Esta fracción es medible. Si se incluye la generación de $A$ y $B$ como parte de la ejecución completa, la fracción serial respecto de una corrida serial es $f_{gen} = T_{gen}/(T_{gen} + T_{ser})$, y la ley de Amdahl impone una cota máxima al speedup de la corrida completa:
+Esta fracción es medible. Si se incluye la generación de *A* y *B* como parte de la ejecución completa, la fracción serial respecto de una corrida serial es $f_{gen} = T_{gen}/(T_{gen} + T_{ser})$, y la ley de Amdahl impone una cota máxima al speedup de la corrida completa:
 
 | $n$ | $f_{gen}$ (generación / corrida serial completa) | Cota de Amdahl $1/f_{gen}$ | $S$ medido sin generación ($p=48$) | $S$ medido con generación ($p=48$) |
 |--:|--:|--:|--:|--:|
@@ -973,7 +1005,7 @@ El **sobrecosto paralelo** $T(p) - T(1)/p$ permite verlo en términos absolutos.
 
 *Figura 7.4. Sobrecosto paralelo dividido por $n^2$ (en nanosegundos), con $p = 16$.*
 
-Para la versión 1D con blocking el sobrecosto normalizado se mantiene casi plano (entre 7 y 9 ns) mientras $n \le 2000$ y luego crece de manera moderada hasta 15 ns: es compatible con un costo dominado por comunicación $O(n^2)$ en problemas chicos y por una contención de memoria creciente en los grandes (cada proceso mantiene su copia de 800 MB de $B$ cuando $n = 10\,000$). En `PDGEMM` el valor crece de 9,7 a 61,7 ns, lo que sugiere un sobrecosto que escala peor que $n^2$ o, más probablemente, que su referencia $T(1)/p$ es tan exigente (por la velocidad de OpenBLAS) que cualquier costo fijo pesa mucho más.
+Para la versión 1D con blocking el sobrecosto normalizado se mantiene casi plano (entre 7 y 9 ns) mientras $n \le 2000$ y luego crece de manera moderada hasta 15 ns: es compatible con un costo dominado por comunicación $O(n^2)$ en problemas chicos y por una contención de memoria creciente en los grandes (cada proceso mantiene su copia de 800 MB de *B* cuando $n = 10\,000$). En `PDGEMM` el valor crece de 9,7 a 61,7 ns, lo que sugiere un sobrecosto que escala peor que $n^2$ o, más probablemente, que su referencia $T(1)/p$ es tan exigente (por la velocidad de OpenBLAS) que cualquier costo fijo pesa mucho más.
 
 ### 7.5 Por qué un $n$ grande favorece el speedup
 
@@ -993,7 +1025,7 @@ El cómputo crece como $O(n^3)$ y la comunicación como $O(n^2)$. Por lo tanto l
 
 Con 16 procesos la eficiencia sube de manera sostenida de 0,37 ($n = 500$) a 0,85 ($n = 10\,000$), y el speedup absoluto de 6,1 a 13,9, acercándose al ideal de 16. La comparación directa pedida por la consigna es clara: la eficiencia con $n = 5000$ y $p = 16$ (0,78) es más del doble que con $n = 500$ (0,37). La proporción de tiempo ocupada por la generación serial también decrece con $n$ (del 70 % al 22 %), por la misma razón.
 
-Hay un matiz que conviene no ocultar. Con $p = 48$ la eficiencia aumenta hasta $n = 7500$ (0,52) pero **baja** a 0,48 con $n = 10\,000$. La teoría predeciría un crecimiento monótono; que no se observe sugiere que, con 48 copias de una matriz $B$ de 800 MB (38 GB en total), aparece un segundo efecto, la saturación del ancho de banda de memoria. Es una hipótesis que explica la tendencia pero que no se verificó con contadores de hardware.
+Hay un matiz que conviene no ocultar. Con $p = 48$ la eficiencia aumenta hasta $n = 7500$ (0,52) pero **baja** a 0,48 con $n = 10\,000$. La teoría predeciría un crecimiento monótono; que no se observe sugiere que, con 48 copias de una matriz *B* de 800 MB (38 GB en total), aparece un segundo efecto, la saturación del ancho de banda de memoria. Es una hipótesis que explica la tendencia pero que no se verificó con contadores de hardware.
 
 ### 7.6 Partición 1D frente a 2D
 
@@ -1016,7 +1048,7 @@ Se compara la versión 1D propia con la referencia 2D (`PDGEMM`) con $p = 48$:
 La versión 1D con blocking es **más rápida que `PDGEMM`** para $n \le 1000$ (donde la sobrecarga de BLACS y la redistribución de `PDGEMM` pesan más) y queda a entre 1,2 y 1,4 veces para $1500 \le n \le 5000$. En $n = 7500$ y $n = 10\,000$ ambas son equivalentes (razón de 0,99 y 1,08). Que una implementación propia de pocas líneas quede cerca de la biblioteca de referencia es un resultado positivo; pero hay que interpretarlo con cuidado por tres razones:
 
 1. **No es una comparación aislada de la partición.** `PDGEMM` usa el `DGEMM` de OpenBLAS, un kernel local unas 3,4 veces más rápido que el nuestro (47 frente a 14 GFLOPS con un proceso). Con el mismo kernel local, la teoría del capítulo 5 anticipa una ventaja del esquema 2D que aquí queda enmascarada.
-2. **El equipo es un único nodo con 192 GB.** La limitación que la partición 2D resuelve —la memoria de $B$ replicada— no es vinculante: 38 GB de copias caben en la memoria disponible. El beneficio de SUMMA aparece cuando la matriz no cabe en un nodo o cuando la red es el cuello de botella.
+2. **El equipo es un único nodo con 192 GB.** La limitación que la partición 2D resuelve —la memoria de *B* replicada— no es vinculante: 38 GB de copias caben en la memoria disponible. El beneficio de SUMMA aparece cuando la matriz no cabe en un nodo o cuando la red es el cuello de botella.
 3. **`PDGEMM` también muestra mesetas** (con $n = 10\,000$, entre $p = 4$ y $p = 8$ el tiempo prácticamente no mejora: 15,3 s a 14,8 s). No se estudió la causa; podría deberse a la forma de la grilla elegida o a contención de memoria, pero no se verificó.
 
 Visto en términos de speedup absoluto contra el mejor serial, con 48 procesos y $n = 10\,000$ la versión 1D con blocking logra 23,4 y `PDGEMM` 25,4; el máximo de `PDGEMM` es 34,0 con $n = 5000$, donde supera a nuestra versión en un 40 %. Es notable que, para $n \ge 7500$, ambas implementaciones se estabilizan en torno a 330-350 GFLOPS, lo que sugiere un techo común del equipo con 48 procesos (por ancho de banda de memoria o frecuencia; no se verificó). La diferencia está dentro de lo esperable si se considera que `PDGEMM` parte de un kernel mucho más eficiente: la partición 2D con SUMMA no se aprovecha en su máximo en este entorno, y su valor se vería en matrices que superan la memoria de un nodo, en la ejecución multinodo o con GPU (capítulo 8). Como indica la regla de ingeniería habitual, si las matrices caben en un solo nodo conviene un BLAS de memoria compartida (OpenBLAS, cuBLAS, MAGMA) antes que una biblioteca distribuida.
@@ -1142,7 +1174,7 @@ En resumen, las conclusiones cualitativas de la sección 7.8 se repiten en un eq
 
 ### 7.11 El límite de memoria de la partición 1D ($n = 15\,000$)
 
-En las versiones 1D cada proceso mantiene una copia completa de $B$, de modo que la memoria total crece con $p$. En el EPYC (192 GB) esto no limita; en el i5-7400 (12 GB) sí. Para observarlo se midió $n = 15\,000$ (1,8 GB por matriz) con $p \in \{1, 2, 4\}$ y 5 repeticiones. Los datos están en `resultados/server_i5_7400_cruce_ram/`. «RAM estimada» es la estimación que hace el script de benchmark antes de lanzar la corrida, como fracción de los 12 GB; el máximo residente es el que midió el sistema.
+En las versiones 1D cada proceso mantiene una copia completa de *B*, de modo que la memoria total crece con $p$. En el EPYC (192 GB) esto no limita; en el i5-7400 (12 GB) sí. Para observarlo se midió $n = 15\,000$ (1,8 GB por matriz) con $p \in \{1, 2, 4\}$ y 5 repeticiones. Los datos están en `resultados/server_i5_7400_cruce_ram/`. «RAM estimada» es la estimación que hace el script de benchmark antes de lanzar la corrida, como fracción de los 12 GB; el máximo residente es el que midió el sistema.
 
 **Tabla 7.8.** Corridas con $n = 15\,000$:
 
@@ -1161,12 +1193,12 @@ Lo que muestran los datos:
 - **El kernel serial mantiene su rendimiento al crecer $n$:** 12,7 GFLOPS con blocking y 5,15 sin él, frente a 13,5 y 5,8 con $n = 10\,000$.
 - **Faltan datos.** La corrida de `ikj` blocking 1D con $n = 15\,000$ figura iniciada en `benchmark_cruce_ram.log` pero no tiene filas en `crudo.csv`, por lo que no se la analiza; tampoco se midió `PDGEMM` con este $n$.
 
-Este resultado es el argumento empírico más concreto a favor de la partición 2D del capítulo 5: en SUMMA cada proceso guarda solo bloques de $A$, $B$ y $C$ y la memoria por proceso baja con $p$ en lugar de mantenerse. Esa ventaja no pudo comprobarse aquí por no haberse medido `PDGEMM` con $n = 15\,000$; queda como trabajo pendiente.
+Este resultado es el argumento empírico más concreto a favor de la partición 2D del capítulo 5: en SUMMA cada proceso guarda solo bloques de *A*, *B* y *C* y la memoria por proceso baja con $p$ en lugar de mantenerse. Esa ventaja no pudo comprobarse aquí por no haberse medido `PDGEMM` con $n = 15\,000$; queda como trabajo pendiente.
 
 
 ### 7.12 Entrada desde archivo en lugar de generación en RAM
 
-Todo el análisis anterior generó $A$ y $B$ en memoria con un generador pseudoaleatorio. Un uso real parte de matrices que ya existen en disco, así que se repitió el barrido leyéndolas de archivos de texto (un número por elemento, formato `%.10g`, unos 13 bytes por elemento: 1,3 GB por matriz con $n = 10\,000$). El rank 0 las lee con `fscanf` y, antes de cada corrida, se vacía la caché de páginas del sistema operativo, de modo que **todas** las lecturas son de disco en frío.
+Todo el análisis anterior generó *A* y *B* en memoria con un generador pseudoaleatorio. Un uso real parte de matrices que ya existen en disco, así que se repitió el barrido leyéndolas de archivos de texto (un número por elemento, formato `%.10g`, unos 13 bytes por elemento: 1,3 GB por matriz con $n = 10\,000$). El rank 0 las lee con `fscanf` y, antes de cada corrida, se vacía la caché de páginas del sistema operativo, de modo que **todas** las lecturas son de disco en frío.
 
 El cronómetro del producto arranca después de la lectura en todas las versiones (serial, MPI 1D y `PDGEMM`); incluye `Bcast`, `Scatterv` y `Gatherv`, y no incluye la lectura. El código del producto es el mismo que en la corrida en RAM. La lectura se mide aparte y queda en la columna `segundos_generacion`. Se midió en los dos equipos, con los mismos $n$, $b = 64$, las mismas repeticiones y las tres versiones paralelas, con $p \in \{1, 2, 4, 8, 16, 32, 48\}$ en el EPYC (`resultados/servidor_48c_archivo/`) y $p \in \{1, 2, 4\}$ en el i5-7400 (`resultados/i5_7400_4c_archivo/`). Las métricas se calculan con `scripts/metricas.py`; la comparación con la corrida en RAM, con `scripts/comparar_entrada.py`, que escribe `resultados/comparacion_entrada_archivo.csv` y las figuras de esta sección.
 
@@ -1174,9 +1206,9 @@ El cronómetro del producto arranca después de la lectura en todas las versione
 
 ![Tiempo de entrada y su peso en la corrida](img/entrada_lectura_vs_generacion.png)
 
-*Figura 7.8. Izquierda: tiempo de generar $A$ y $B$ en RAM (trazos) o de leerlas de archivo en frío (continuo). Derecha: porcentaje de la corrida serial (entrada + serial bloqueado) que ocupa la entrada.*
+*Figura 7.8. Izquierda: tiempo de generar *A* y *B* en RAM (trazos) o de leerlas de archivo en frío (continuo). Derecha: porcentaje de la corrida serial (entrada + serial bloqueado) que ocupa la entrada.*
 
-**Tabla 7.9.** Tiempo de entrada en segundos, $A$ y $B$ juntas. Para la lectura se informa la mediana de todas las corridas y, entre paréntesis, el mínimo y el máximo:
+**Tabla 7.9.** Tiempo de entrada en segundos, *A* y *B* juntas. Para la lectura se informa la mediana de todas las corridas y, entre paréntesis, el mínimo y el máximo:
 
 | $n$ | EPYC: generación | EPYC: lectura | i5: generación | i5: lectura |
 |--:|--:|--:|--:|--:|
@@ -1236,10 +1268,10 @@ En el i5-7400, los cocientes de las tres versiones paralelas y de las dos serial
 
 En las versiones MPI la lectura es paralelizable, y es una mejora que no se implementó por falta de tiempo.
 
-- Cada proceso necesita solo sus filas de $A$, de modo que puede leerlas por su cuenta (por ejemplo con MPI-IO) en lugar de que el rank 0 lea todo y reparta con `Scatterv`.
+- Cada proceso necesita solo sus filas de *A*, de modo que puede leerlas por su cuenta (por ejemplo con MPI-IO) en lugar de que el rank 0 lea todo y reparta con `Scatterv`.
 - Con texto de ancho variable los procesos no saben dónde empieza cada fila sin un índice. Con un formato binario de ancho fijo (8 bytes por elemento) cada proceso calcula su desplazamiento directamente, y además se evita el costo del análisis del texto.
-- En 1D todos los procesos necesitan $B$ completa. Puede leerse repartida (cada proceso una parte) y armarse en todos con `Allgatherv`, en lugar de leerla entera en el rank 0 y difundirla con `Bcast`.
-- En la partición 2D cada proceso leería solo su loseta de $A$ y de $B$.
+- En 1D todos los procesos necesitan *B* completa. Puede leerse repartida (cada proceso una parte) y armarse en todos con `Allgatherv`, en lugar de leerla entera en el rank 0 y difundirla con `Bcast`.
+- En la partición 2D cada proceso leería solo su loseta de *A* y de *B*.
 - No se midió cuánto se ganaría: depende de cuánto del tiempo de lectura es análisis del texto y cuánto ancho de banda de disco (ver la hipótesis de la Tabla 7.9). Si domina el análisis del texto, la lectura escalaría con $p$ hasta que el disco limite.
 
 #### Resumen
@@ -1260,15 +1292,15 @@ Las mejoras se ordenan de menor a mayor alcance: primero las que corrigen limita
 
 ### 8.1 Generación distribuida de matrices
 
-**Problema detectado.** En las versiones 1D el rank 0 genera $A$ y $B$ completas, las reparte y recolecta $C$: una parte serial que no se beneficia de agregar procesos. Para $n = 1000$ equivale al 18 % de una corrida serial y limita el speedup de la ejecución completa a 5,4 por la ley de Amdahl, aunque el producto aislado alcance 10 (sección 7.3).
+**Problema detectado.** En las versiones 1D el rank 0 genera *A* y *B* completas, las reparte y recolecta *C*: una parte serial que no se beneficia de agregar procesos. Para $n = 1000$ equivale al 18 % de una corrida serial y limita el speedup de la ejecución completa a 5,4 por la ley de Amdahl, aunque el producto aislado alcance 10 (sección 7.3).
 
 **Propuesta.** Que cada proceso genere solo los datos que le corresponden:
 
-- **$A$:** cada proceso genera únicamente sus filas, eliminando el `Scatterv` y la generación en serie.
-- **$B$ (en 1D):** como todos necesitan la matriz completa, puede generarse **en cada proceso** con la misma semilla, reemplazando la difusión por una generación local redundante ($O(n^2)$ de cómputo barato frente a $O(n^2)$ de comunicación costosa). En la versión 2D cada proceso genera solo su loseta.
+- **<i>A</i>:** cada proceso genera únicamente sus filas, eliminando el `Scatterv` y la generación en serie.
+- **<i>B</i> (en 1D):** como todos necesitan la matriz completa, puede generarse **en cada proceso** con la misma semilla, reemplazando la difusión por una generación local redundante ($O(n^2)$ de cómputo barato frente a $O(n^2)$ de comunicación costosa). En la versión 2D cada proceso genera solo su loseta.
 - **Reproducibilidad:** con un generador de números pseudoaleatorios *sin estado* (el valor de cada elemento es una función de $(i, j, \text{semilla})$) el resultado es idéntico para cualquier $p$ y cualquier partición, lo que permite validar sin mover datos.
-- **Verificación sin recolectar $C$:** comprobar el resultado con una norma o una suma de control obtenidas con `MPI_Reduce`, o con la verificación probabilística de Freivalds ($ABx = C x$ para un vector aleatorio $x$, que cuesta $O(n^2)$), evita el `Gatherv` final cuando no se necesita $C$ en una única máquina.
-- **Entrada/salida real:** si las matrices vienen de archivos, la lectura paralela con MPI-IO distribuye ese costo. La sección 7.12 lo cuantifica: leer en texto con `fscanf` cuesta 11–16 veces más que generar y reduce la cota de Amdahl de la corrida completa a 4,2 con $n = 10\,000$. Un formato binario, con cada proceso leyendo solo sus filas de $A$ y una parte de $B$ (armada con `Allgatherv`), atacaría directamente esa fracción serial.
+- **Verificación sin recolectar *C*:** comprobar el resultado con una norma o una suma de control obtenidas con `MPI_Reduce`, o con la verificación probabilística de Freivalds ($ABx = C x$ para un vector aleatorio $x$, que cuesta $O(n^2)$), evita el `Gatherv` final cuando no se necesita *C* en una única máquina.
+- **Entrada/salida real:** si las matrices vienen de archivos, la lectura paralela con MPI-IO distribuye ese costo. La sección 7.12 lo cuantifica: leer en texto con `fscanf` cuesta 11–16 veces más que generar y reduce la cota de Amdahl de la corrida completa a 4,2 con $n = 10\,000$. Un formato binario, con cada proceso leyendo solo sus filas de *A* y una parte de *B* (armada con `Allgatherv`), atacaría directamente esa fracción serial.
 
 Con ello desaparece la fracción serial de generación, y la cota de Amdahl pasa a depender solo de la comunicación y la contención de memoria.
 
@@ -1294,7 +1326,7 @@ Todas las distribuciones del trabajo son **estáticas**: se deciden antes de emp
 
 ### 8.5 Otras mejoras
 
-- **Esquema híbrido MPI + OpenMP.** Un proceso MPI por nodo (o por socket) con hilos dentro. En la versión 1D, 48 procesos mantienen 48 copias de $B$ (38 GB con $n = 10\,000$); con un proceso de 48 hilos hay **una sola copia** (0,8 GB). Reduce también el número de participantes en las colectivas.
+- **Esquema híbrido MPI + OpenMP.** Un proceso MPI por nodo (o por socket) con hilos dentro. En la versión 1D, 48 procesos mantienen 48 copias de *B* (38 GB con $n = 10\,000$); con un proceso de 48 hilos hay **una sola copia** (0,8 GB). Reduce también el número de participantes en las colectivas.
 - **Comparación con el mismo kernel local.** Usar `DGEMM` de OpenBLAS como kernel de la versión 1D permitiría aislar el efecto de la partición (1D frente a 2D) del efecto del kernel, que en el capítulo 7 están mezclados.
 - **Cronometrar cada fase** (distribución, cómputo, recolección) en las versiones 1D, para separar comunicación de contención de memoria.
 - **Autoajuste del tamaño de bloque.** El barrido de la sección 2.3 mostró que el óptimo depende de la máquina (144–192 en el servidor, 64 en el portátil). Un barrido corto al instalar, o una regla que combine L1d y L2, permitiría elegirlo sin intervención; y repetirlo en la versión MPI bloqueada, con varios procesos compartiendo L3.

@@ -39,17 +39,21 @@ def por_p(col,fname,ylabel,title,ideal=False,ns=(1000,5000,10000)):
     ax[0].set_ylabel(ylabel);ax[0].legend(fontsize=8)
     fig.suptitle(title,y=1.02);fig.tight_layout();fig.savefig(OUT+fname,bbox_inches="tight");plt.close()
 por_p("speedup_p1","speedup_vs_p.png","speedup relativo a p = 1","Speedup relativo al propio algoritmo con un proceso (servidor, 48 cores)",ideal=True)
-por_p("eficiencia_p1","eficiencia_vs_p.png","eficiencia = S/p","Eficiencia paralela (servidor, 48 cores)")
+por_p("eficiencia_p1","eficiencia_vs_p.png","eficiencia relativa = S_rel/p","Eficiencia relativa al propio algoritmo con un proceso (servidor, 48 cores)")
+por_p("speedup_mejor_serial","speedup_abs_vs_p.png","speedup absoluto = T_serial/T(p)","Speedup absoluto respecto del mejor serial (ikj con blocking) (servidor, 48 cores)",ideal=True)
+por_p("eficiencia_mejor_serial","eficiencia_abs_vs_p.png","eficiencia absoluta = S_abs/p","Eficiencia absoluta respecto del mejor serial (servidor, 48 cores)")
 
-fig,ax=plt.subplots(1,2,figsize=(10,3.8),sharey=True)
-for a,p in zip(ax,[16,48]):
-    for alg,(c,mk,l) in EST.items():
-        d=m[(m.algoritmo==alg)&(m.procesos==p)].sort_values("n")
-        a.plot(d.n,d.eficiencia_p1,marker=mk,color=c,label=l)
-    a.set_xscale("log");a.set_xlabel("n");a.set_title(f"p = {p}")
-    a.set_xticks([500,1000,2000,5000,10000]);a.set_xticklabels([500,1000,2000,5000,10000])
-ax[0].set_ylabel("eficiencia = S/p");ax[0].legend(fontsize=8)
-fig.suptitle("Efecto del tamaño del problema sobre la eficiencia",y=1.02);fig.tight_layout();fig.savefig(OUT+"eficiencia_vs_n.png",bbox_inches="tight");plt.close()
+for col,fname,yl,tt in [("eficiencia_p1","eficiencia_vs_n.png","eficiencia relativa = S_rel/p","Efecto del tamaño del problema sobre la eficiencia relativa"),
+                        ("eficiencia_mejor_serial","eficiencia_abs_vs_n.png","eficiencia absoluta = S_abs/p","Efecto del tamaño del problema sobre la eficiencia absoluta")]:
+    fig,ax=plt.subplots(1,2,figsize=(10,3.8),sharey=True)
+    for a,p in zip(ax,[16,48]):
+        for alg,(c,mk,l) in EST.items():
+            d=m[(m.algoritmo==alg)&(m.procesos==p)].sort_values("n")
+            a.plot(d.n,d[col],marker=mk,color=c,label=l)
+        a.set_xscale("log");a.set_xlabel("n");a.set_title(f"p = {p}")
+        a.set_xticks([500,1000,2000,5000,10000]);a.set_xticklabels([500,1000,2000,5000,10000])
+    ax[0].set_ylabel(yl);ax[0].legend(fontsize=8)
+    fig.suptitle(tt,y=1.02);fig.tight_layout();fig.savefig(OUT+fname,bbox_inches="tight");plt.close()
 
 fig,ax=plt.subplots(1,2,figsize=(10,3.8))
 for alg,(c,mk,l) in EST.items():

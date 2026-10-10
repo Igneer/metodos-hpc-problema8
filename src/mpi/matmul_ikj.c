@@ -1,23 +1,3 @@
-/*
- * matmul_ikj.c (MPI)
- *
- * C = A * B (A: N x M, B: M x P, C: N x P) con distribucion 1D por
- * filas: se reparten filas de A entre procesos, B se replica entera
- * (Bcast), C se recolecta en el rank 0 (Gatherv). Kernel local con
- * orden ikj (mejor localidad de cache que ijk, ver matmul_ikj.c en
- * src/serial/).
- *
- * N, M, P son constantes de compilacion (config.h), igual que la
- * version secuencial, y las matrices son estaticas (BSS, sin
- * malloc/free) para comparar ambas versiones sin que la asignacion de
- * memoria distorsione el benchmark. Como `size` (numero de procesos)
- * solo se conoce en runtime, local_A/local_C se dimensionan para el
- * peor caso (np=1, un proceso recibe las N filas enteras).
- *
- * Uso:
- *   mpirun -np <procesos> ./matmul_ikj [--semilla S] [--repeticiones R] [--csv]
- */
-
 #include <mpi.h>
 #include <stdio.h>
 

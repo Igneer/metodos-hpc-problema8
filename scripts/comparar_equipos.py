@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""Compara el i5-7400 (4 cores) con el EPYC (48 cores) para los p comunes (1, 2, 4).
 
-Uso:
-  python scripts/comparar_equipos.py
-  python scripts/comparar_equipos.py --n 10000 --salida img/equipos_i5_vs_epyc.png
-
-Lee los metricas.csv de cada equipo (medianas). Eficiencia relativa al propio p = 1.
-"""
 import argparse
 
 import matplotlib

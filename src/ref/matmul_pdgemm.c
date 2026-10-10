@@ -1,29 +1,3 @@
-/*
- * matmul_pdgemm.c (MPI + ScaLAPACK)
- *
- * Referencia de biblioteca: C = A * B con PDGEMM de PBLAS/ScaLAPACK, cuyo
- * algoritmo interno es de tipo SUMMA (difusiones por filas y columnas de la
- * grilla de procesos). Aqui no se implementa la coreografia: la grilla la
- * crea BLACS, la distribucion la hace PDGEMR2D y el producto PDGEMM.
- *
- * Layout: nuestras matrices son row-major y ScaLAPACK es column-major. Sin
- * convertir nada: la memoria row-major de X (f x c) es la matriz X^T (c x f)
- * en column-major. Por eso se calcula C^T = B^T * A^T:
- *   m=P, n=N, k=M, con A^T (MxN), B^T (PxM) y C^T (PxN) sobre los mismos
- *   arreglos globales A, B y C de las demas versiones.
- *
- * Distribucion: la raiz posee las matrices completas en una grilla 1x1;
- * PDGEMR2D las redistribuye a una grilla Pr x Pc con bloques ciclicos NB x NB
- * y recoge C de vuelta. Las matrices de aplicacion son estaticas (sin malloc).
- *
- * Uso:
- *   mpirun -np <procesos> ./matmul_pdgemm [--semilla S] [--repeticiones R] [--csv]
- *          [--archivo-a RUTA] [--archivo-b RUTA] [--imprimir]
- * Compilar con: -lscalapack-openmpi -lopenblas -lm   (-DNB=<bloque>, 64 por defecto)
- * Se recomienda ejecutar con OPENBLAS_NUM_THREADS=1: asi cada proceso MPI usa un
- * solo hilo de OpenBLAS en lugar de lanzar los suyos.
- */
-
 #include <mpi.h>
 #include <stdio.h>
 #include <string.h>

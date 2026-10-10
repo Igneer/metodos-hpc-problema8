@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-Compila y corre los tres binarios seriales (ikj, ijk, ikj_bloqueado)
-para un barrido de tamanios NxMxP, junta las repeticiones de cada uno
-y calcula la mediana. Genera comparacion_matmul_serial.csv con un
-resumen por (algoritmo, n).
 
-La agregacion estadistica vive aca (script externo) y no en los
-binarios de C a proposito: cada binario solo mide y emite datos
-crudos por repeticion (--csv), este script es el que resume.
-"""
 import csv
 import statistics
 import subprocess

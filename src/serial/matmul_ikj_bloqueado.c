@@ -1,41 +1,4 @@
-/*
- * matmul_ikj_bloqueado.c
- *
- * Multiplicacion secuencial C = A * B (A: N x M, B: M x P, C: N x P)
- * usando el orden de loops ikj con cache blocking/tiling sobre las
- * tres dimensiones (i, k, j). Mismo algoritmo O(n*m*p) y mismo
- * cuerpo interno que matmul_ikj.c; la diferencia es que en vez de
- * barrer cada dimension de punta a punta, se recorre en bloques de
- * tamanio BI/BK/BJ (ver src/common/bloque.h) para que los datos
- * activos de A, B y C quepan juntos en la cache (L2 tipicamente) y
- * se reutilicen antes de ser desalojados.
- *
- * Por que hace falta esto ademas de ikj:
- * ikj ya logra que el loop mas interno (en j) sea stride-1 sobre B y
- * C. Pero para cada fila i de A, ese loop en k recorre las M filas
- * completas de B (M*P elementos). Si M*P*sizeof(real_t) no entra en
- * cache, B se vuelve a traer entero desde RAM en cada una de las N
- * iteraciones de i, en vez de reutilizarse. El blocking evita esto
- * acotando cuantas filas de A y columnas de B/C se procesan juntas
- * antes de pasar al siguiente bloque, para que el bloque de B en uso
- * siga resonando en cache mientras se reutiliza.
- *
- * N, M, P son constantes de compilacion (ver
- * src/common/config.h), no parametros de linea de comandos: las
- * matrices son estaticas (viven en BSS, no en el heap). Para otro
- * tamanio o bloque, recompilar con -DN=... -DM=... -DP=...
- * (BI/BK/BJ valen 64 por defecto, ver src/common/bloque.h; se pueden
- * cambiar con -DBLOQUE=... o -DBI=... -DBK=... -DBJ=...)
- *
- * Uso:
- *   matmul_ikj_bloqueado [--semilla S] [--repeticiones R] [--csv]
- *
- * Ejemplos:
- *   ./matmul_ikj_bloqueado --repeticiones 10
- *   ./matmul_ikj_bloqueado --csv > resultados_ikj_bloqueado.csv
- */
-
-#include "../common/timing.h" /* primero: define _POSIX_C_SOURCE antes de <stdio.h> */
+#include "../common/timing.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,31 +16,11 @@ static real_t A[(size_t)N * M];
 static real_t B[(size_t)M * P];
 static real_t C[(size_t)N * P];
 
-/* ---------------------------------------------------------------------
- * Devuelve el menor entre a y b (para acotar el ultimo bloque parcial
- * cuando la dimension no es multiplo exacto del tamanio de bloque).
- * ------------------------------------------------------------------- */
+
 static int min_int(int a, int b) {
     return a < b ? a : b;
 }
 
-/* ---------------------------------------------------------------------
- * Multiplicacion ikj bloqueada (cache blocking/tiling).
- *
- * Los tres loops externos (ii, jj, kk) recorren la matriz en bloques
- * de BI x BK x BJ. El cuerpo interno es exactamente el mismo ikj de
- * siempre (ver matmul_ikj.c), pero acotado al rango [ii, ii+BI) x
- * [kk, kk+BK) x [jj, jj+BJ) en vez de barrer 0..n, 0..m, 0..p enteros.
- *
- * Orden elegido para los loops de bloque (ii, jj, kk): para un bloque
- * de filas de C fijo (ii) y un bloque de columnas fijo (jj), se
- * recorren todos los bloques kk antes de pasar al siguiente jj. Eso
- * hace que el bloque de C (BI x BJ) se mantenga en cache acumulando
- * mientras se suman los distintos aportes de cada bloque de k, en
- * vez de tener que releerlo/reescribirlo desde RAM por cada kk.
- *
- * Nota: c debe venir inicializada en cero (se usa como acumulador).
- * ------------------------------------------------------------------- */
 static void multiplicar_ikj_bloqueada(const real_t *restrict a,
                                        const real_t *restrict b,
                                        real_t *restrict c,

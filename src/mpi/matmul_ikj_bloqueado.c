@@ -1,23 +1,3 @@
-/*
- * matmul_ikj_bloqueado.c (MPI)
- *
- * C = A * B (A: N x M, B: M x P, C: N x P) con distribucion 1D por
- * filas: se reparten filas de A entre procesos, B se replica entera
- * (Bcast), C se recolecta en el rank 0 (Gatherv). Kernel local ikj
- * bloqueado (cache blocking/tiling con bloques de bloque.h, ver
- * matmul_ikj_bloqueado.c en src/serial/).
- *
- * N, M, P son constantes de compilacion (config.h), igual que la
- * version secuencial, y las matrices son estaticas (BSS, sin
- * malloc/free) para comparar ambas versiones sin que la asignacion de
- * memoria distorsione el benchmark. Como `size` (numero de procesos)
- * solo se conoce en runtime, local_A/local_C se dimensionan para el
- * peor caso (np=1, un proceso recibe las N filas enteras).
- *
- * Uso:
- *   mpirun -np <procesos> ./matmul_ikj_bloqueado [--semilla S] [--repeticiones R] [--csv]
- */
-
 #include <mpi.h>
 #include <stdio.h>
 
@@ -45,8 +25,8 @@ static int min_int(int a, int b) {
 }
 
 /* Version bloqueada de ikj: los tres loops externos (ii, jj, kk)
- * recorren en bloques BI x BK x BJ; el cuerpo interno es el mismo ikj
- * de siempre, acotado al bloque actual. c debe venir en cero. */
+   recorren en bloques BI x BK x BJ; el cuerpo interno es el mismo ikj
+   de siempre, acotado al bloque actual. c debe venir en cero. */
 static void multiplicar_ikj_bloqueada(const real_t *restrict a,
                                        const real_t *restrict b,
                                        real_t *restrict c,
@@ -156,7 +136,7 @@ int main(int argc, char *argv[]) {
 
     for (int r = 0; r < config.repeticiones; r++) {
         /* ikj bloqueado acumula con += sobre local_C: hay que ponerla
-         * en cero antes de cada repeticion. */
+           en cero antes de cada repeticion. */
         if (mis_elementos_C > 0) {
             matriz_poner_cero(local_C, mis_filas, P);
         }

@@ -1,9 +1,3 @@
-"""Genera los gráficos del informe (README.md).
-
-Uso, desde la raíz del repositorio:  python scripts/graficos_informe.py
-Lee resultados/comparacion_matmul_serial.csv y resultados/servidor/metricas.csv
-y escribe PNG en img/. Requiere pandas, numpy y matplotlib.
-"""
 import pandas as pd, numpy as np, matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt

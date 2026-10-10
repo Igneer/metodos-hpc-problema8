@@ -1,23 +1,4 @@
 #!/usr/bin/env bash
-#
-# test_matriz_conocida.sh
-#
-# Compila las implementaciones de multiplicacion de matrices (3
-# seriales, 3 MPI row-wise, SUMMA 2D propio y la referencia ScaLAPACK
-# PDGEMM) con N=M=P=4, las corre con dos matrices densas 4x4 de
-# tests/datos/ (A = 1..16 por filas, B = 16..1 por filas) e imprime C
-# comparandolo contra A*B calculado a mano. A y B son distintas y no
-# simetricas a proposito: asi se detecta un producto con operandos
-# invertidos o transpuestos. Sirve para verificar que el reparto y la
-# recoleccion de cada estrategia no tenga bugs de indices antes de
-# confiar en un benchmark de rendimiento mas grande.
-#
-# Uso:
-#   bash scripts/test_matriz_conocida.sh
-#
-# Requiere gcc, mpicc y mpirun en el PATH. La referencia PDGEMM ademas
-# necesita ScaLAPACK y OpenBLAS (-lscalapack-openmpi -lopenblas); si no se
-# pueden enlazar, esa prueba se omite con un aviso.
 
 set -uo pipefail
 

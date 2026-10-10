@@ -1,13 +1,3 @@
-#!/usr/bin/env bash
-# Barrido del tamanio de bloque del serial ikj bloqueado (BI=BK=BJ=B).
-# Deja un CSV  n,bloque,gflops  (media de las repeticiones) para comparar
-# con resultados/servidor/barrido_bloque.csv.
-#
-# Uso:
-#   scripts/barrido_bloque.sh                       # defecto: N=1000 2000 4000
-#   scripts/barrido_bloque.sh --ns "2000 4000" --bloques "64 128 160" --reps 3
-#   scripts/barrido_bloque.sh --salida resultados/local/barrido_bloque.csv
-# Conviene correrlo con el equipo enchufado y sin otros programas pesados.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 

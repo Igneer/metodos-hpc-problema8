@@ -4,9 +4,9 @@
 #include <stdint.h>
 
 /*
- * MPI usa int en la interfaz clasica de Scatterv/Gatherv. Los calculos de
- * tamanio se hacen primero con size_t y solo se convierten despues de comprobar
- * que el valor entra en el rango de int.
+   MPI usa int en la interfaz clasica de Scatterv/Gatherv. Los calculos de
+   tamanio se hacen primero con size_t y solo se convierten despues de comprobar
+   que el valor entra en el rango de int.
  */
 static int convertir_a_int(size_t valor, int *resultado) {
     /* Ejemplo: un valor mayor que INT_MAX no puede guardarse en un count MPI. */
@@ -20,10 +20,9 @@ static int convertir_a_int(size_t valor, int *resultado) {
 }
 
 /*
- * Calcula la metadata de una particion 1D por filas.
- *
- * La funcion no mueve datos ni conoce MPI: solo llena sendcounts y displs.
- * Esa separacion permite probar la aritmetica sin ejecutar procesos MPI.
+   Calcula la metadata de una particion 1D por filas.
+   La funcion no mueve datos ni conoce MPI: solo llena sendcounts y displs.
+   Esa separacion permite probar la aritmetica sin ejecutar procesos MPI.
  */
 int calcular_particiones(size_t filas, size_t columnas, int procesos,
                          int capacidad_procesos, int sendcounts[],
@@ -40,8 +39,8 @@ int calcular_particiones(size_t filas, size_t columnas, int procesos,
     }
 
     /*
-     * Ejemplo con filas=10 y procesos=3:
-     * filas_base=3 y filas_sobrantes=1.
+       Ejemplo con filas=10 y procesos=3:
+       filas_base=3 y filas_sobrantes=1.
      */
     size_t cantidad_procesos = (size_t)procesos;
     size_t filas_base = filas / cantidad_procesos;
@@ -56,8 +55,8 @@ int calcular_particiones(size_t filas, size_t columnas, int procesos,
         size_t filas_locales = filas_base + (rank < filas_sobrantes ? 1 : 0);
 
         /*
-         * Antes de calcular filas_locales * columnas verificamos que la
-         * multiplicacion no desborde size_t.
+           Antes de calcular filas_locales * columnas verificamos que la
+           multiplicacion no desborde size_t.
          */
         if (columnas != 0 && filas_locales > SIZE_MAX / columnas) {
             return PARTICIONES_DESBORDAMIENTO;
@@ -67,8 +66,8 @@ int calcular_particiones(size_t filas, size_t columnas, int procesos,
         size_t elementos_locales = filas_locales * columnas;
 
         /*
-         * Para 10 columnas y el reparto 4,3,3 se obtienen counts 40,30,30.
-         * El segundo valor convertido es la posicion inicial del bloque.
+           Para 10 columnas y el reparto 4,3,3 se obtienen counts 40,30,30.
+           El segundo valor convertido es la posicion inicial del bloque.
          */
         if (convertir_a_int(elementos_locales, &sendcounts[rank]) !=
                 PARTICIONES_EXITO ||

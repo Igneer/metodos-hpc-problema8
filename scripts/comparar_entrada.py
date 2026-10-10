@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""Compara la entrada por archivo (lectura de A y B) con la generacion en RAM.
 
-Uso, desde la raiz del repositorio:
-  python scripts/comparar_entrada.py
-
-Lee los metricas.csv de las corridas en RAM y con archivo de cada equipo (EPYC e i5-7400),
-escribe resultados/comparacion_entrada_archivo.csv y tres figuras en img/:
-  entrada_lectura_vs_generacion.png   tiempo de entrada y fraccion de la corrida serial
-  entrada_amdahl.png                  speedup de la corrida completa (entrada incluida)
-  entrada_producto_archivo_vs_ram.png cociente de tiempos del producto, archivo / RAM
-Los tiempos del producto no incluyen la entrada; segundos_generacion es la generacion
-(corridas en RAM) o la lectura de los archivos con cache frio (corridas con archivo).
-Requiere pandas, numpy y matplotlib.
-"""
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt

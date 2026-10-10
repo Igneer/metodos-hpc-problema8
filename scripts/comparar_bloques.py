@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""Compara las versiones bloqueadas medidas con b=64 y con b=160.
 
-Uso:
-  python scripts/comparar_bloques.py
-  python scripts/comparar_bloques.py --b64 resultados/servidor/crudo.csv \
-      --b160 resultados/servidor/crudo_mayor_bloque.csv --salida img/bloque_64_vs_160.png
-
-Todo sobre la mediana de las repeticiones. S_abs = speedup contra el serial bloqueado
-del mismo b. Solo se comparan los p presentes en ambas corridas.
-"""
 import argparse
 
 import matplotlib

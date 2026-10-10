@@ -1,12 +1,3 @@
-/*
- * generar_matrices.c
- *
- * Escribe A_<n>.txt y B_<n>.txt (matrices cuadradas n x n) en un directorio,
- * con las mismas semillas que usan los benchmarks (42 y 43), de modo que
- * leerlas desde archivo da exactamente los mismos datos que generarlas.
- *
- * Uso: generar_matrices N DIRECTORIO [SEMILLA]
- */
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>

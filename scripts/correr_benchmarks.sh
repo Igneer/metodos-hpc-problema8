@@ -1,33 +1,5 @@
 #!/usr/bin/env bash
-# Corre todas las implementaciones variando N (matrices cuadradas) y cantidad
-# de procesos, y deja UN csv crudo para procesar fuera del servidor.
-# Solo usa bash/awk/gcc/mpicc: no requiere Python.
-#
-# Uso:
-#   scripts/correr_benchmarks.sh --perfil laptop            # 4 cores / 8 GB
-#   scripts/correr_benchmarks.sh --perfil servidor          # autodetecta cores y RAM
-#   scripts/correr_benchmarks.sh --perfil servidor --dry-run   # solo muestra el plan
-# Opciones: --cores C  --ram-gb G  --ns "1024 2048"  --ps "1 2 4"
-#           --algoritmos "serial_ikj mpi_ikj"  --timeout SEG  --salida DIR
-#           --limite-ram [--cgroup SWAP_GB]   experimento de cruce del limite de RAM
-#           --nmax-serial N   N maximo comun a seriales/mpi_ijk/mpi_ikj (defecto 20000)
-#           --solo seriales|mpi   corre solo ese grupo (defecto: todos)
-#           --desde-archivo [--dir-matrices DIR]   A y B se leen de archivos de texto
-#                             (A_<n>.txt/B_<n>.txt, se crean si faltan) en vez de generarse;
-#                             segundos_generacion pasa a ser el tiempo de lectura.
-#                             Siempre con cache frio: antes de cada corrida se saca A y B del
-#                             cache del SO, para que todas midan lectura real de disco.
-#                             Salida por defecto: resultados/<perfil>_<cores>c_archivo
-#           --repeticiones R  repeticiones para N > --n-chico (defecto 5)
-#           --reps-chicas R --n-chico N   repeticiones para N <= N (defecto 10 y 2000)
-#
-# Salida: resultados/<perfil>_<cores>c/crudo.csv
-#   (con --desde-archivo la carpeta lleva sufijo _archivo)
-#   perfil,n,procesos,algoritmo,repeticion,segundos,gflops,segundos_generacion
-#   (segundos = solo el producto [+ distribucion/recoleccion en MPI]; segundos_generacion =
-#    tiempo de crear A y B, medido una vez por corrida, repetido en cada fila)
-# Es reanudable: si se corta, volver a lanzar el mismo comando salta lo hecho.
-# Recomendado en el servidor:  nohup scripts/correr_benchmarks.sh ... &
+
 set -uo pipefail
 cd "$(dirname "$0")/.."
 

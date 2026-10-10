@@ -1,29 +1,5 @@
 #!/usr/bin/env python3
-"""Metricas a partir de crudo.csv (salida de correr_benchmarks.sh).
 
-Uso:
-  python scripts/metricas.py                                  # resultados/servidor/crudo.csv
-  python scripts/metricas.py --entradas A/crudo.csv B/crudo.csv   # varias corridas: se concatenan
-  python scripts/metricas.py --salida resultados/servidor
-
-Escribe en <salida>/metricas.csv. Requiere pandas y numpy.
-
-Definiciones (todo sobre la MEDIANA de las repeticiones de cada (algoritmo, n, p)):
-  mad_s / mad_rel      mediana de |x - mediana| y su cociente con la mediana.
-  speedup_p1           t(alg, n, p=1) / t(alg, n, p): escalado del propio algoritmo.
-  speedup_mejor_serial t(mejor serial para ese n) / t(alg, n, p).
-  eficiencia_*         speedup / p.
-  fraccion_serial_karp_flatt           fraccion serial experimental e = (1/S - 1/p) / (1 - 1/p), con S = speedup_p1.
-  sobrecosto_paralelo_s  t(p) - t(p=1)/p: tiempo perdido respecto del escalado ideal del propio algoritmo
-                         (comunicacion, contencion de memoria, desbalance; vacio para p=1 y seriales).
-  sobrecosto_por_n2_ns   sobrecosto_paralelo_s / n^2, en nanosegundos: si es constante el sobrecosto
-                         escala como n^2 (p. ej. el Bcast de B); si crece, hay saturacion (memoria/ancho de banda).
-  fraccion_generacion             gen / (gen + t): peso de la generacion (no paralelizable) en la corrida completa.
-  razon_generacion_ejecucion          gen / t.
-  speedup_con_generacion_mejor_serial  (gen + t_mejor_serial) / (gen + t): speedup de la corrida completa
-                         incluyendo la generacion secuencial (Amdahl real).
-  tiempo_relativo_pdgemm            t / t(ref_pdgemm, mismo n y p): >1 = mas lento que ScaLAPACK.
-"""
 import argparse
 from pathlib import Path
 

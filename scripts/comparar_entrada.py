@@ -78,57 +78,49 @@ def fig_entrada(datos, t):
 
 
 def fig_amdahl(datos):
+    from matplotlib.lines import Line2D
     ram, arc, c, mk = datos["EPYC (48 cores)"]
     mr, ma = cargar(ram), cargar(arc)
-    fig, ax = plt.subplots(1, 2, figsize=(10, 3.9))
-    for alg, col in [(BLOQ, "#eb6834"), (PDG, "#1baf7a")]:
-        etiqueta = dict((a, l) for a, l, _ in ALGS)[alg]
-        for n, mkr in [(1000, "^"), (10000, "o")]:
-            for m, ls, lab in [(mr, "--", "RAM"), (ma, "-", "archivo")]:
-                d = m[(m.algoritmo == alg) & (m.n == n)].sort_values("procesos")
-                ax[0].plot(d.procesos, d.speedup_con_generacion_mejor_serial, ls, marker=mkr, color=col, ms=4,
-                           label=f"{etiqueta}, n={n} · {lab}")
-    ax[0].set_xlabel("procesos p"); ax[0].set_ylabel("speedup de la corrida completa")
-    ax[0].set_title("EPYC · entrada incluida (continuo: archivo, trazos: RAM)"); ax[0].legend(fontsize=6, ncol=2)
-    for alg, col in [(BLOQ, "#eb6834"), (PDG, "#1baf7a")]:
-        for m, ls, lab in [(mr, "--", "RAM"), (ma, "-", "archivo")]:
+    nombre = dict((a, l) for a, l, _ in ALGS)
+    estilo = {BLOQ: ("#D55E00", "s"), PDG: ("#0072B2", "^")}   # color y marcador por algoritmo (Okabe-Ito)
+    origen = [(mr, "--", "RAM"), (ma, "-", "archivo")]          # trazos: RAM, continuo: archivo
+    gris = "#5f5e58"
+    fig, ax = plt.subplots(1, 2, figsize=(10, 4.4))
+    n0 = 10000
+    for alg, (col, mkr) in estilo.items():
+        for m, ls, lab in origen:
+            d = m[(m.algoritmo == alg) & (m.n == n0)].sort_values("procesos")
+            ax[0].plot(d.procesos, d.speedup_con_generacion_mejor_serial, ls, marker=mkr, ms=4, color=col)
+    for m, ls, lab in origen:
+        cota = entrada_por_n(m).loc[n0, "cota_amdahl"]
+        ax[0].axhline(cota, ls=ls, color=gris, lw=1)
+        ax[0].text(48, cota * 1.04, f"cota de Amdahl, {lab}: {cota:.1f}".replace(".", ","), fontsize=7, color=gris, va="bottom", ha="right")
+    ax[0].set_ylim(0, 55); ax[0].set_xlabel("procesos p"); ax[0].set_ylabel("speedup de la corrida completa")
+    ax[0].set_title(f"n = {n0:,}".replace(",", " ") + ": efecto de p")
+    for alg, (col, mkr) in estilo.items():
+        for m, ls, lab in origen:
             d = m[(m.algoritmo == alg) & (m.procesos == 48)].sort_values("n")
-            ax[1].plot(d.n, d.speedup_con_generacion_mejor_serial, ls, marker="s", ms=4, color=col,
-                       label=f"{dict((a, l) for a, l, _ in ALGS)[alg]} · {lab}")
-    for m, ls, lab in [(mr, "--", "RAM"), (ma, "-", "archivo")]:
+            ax[1].plot(d.n, d.speedup_con_generacion_mejor_serial, ls, marker=mkr, ms=4, color=col)
+    for m, ls, lab in origen:
         e = entrada_por_n(m)
-        ax[1].plot(e.index, e.cota_amdahl, ls, color="#5f5e58", lw=1, label=f"cota de Amdahl 1/f · {lab}")
+        ax[1].plot(e.index, e.cota_amdahl, ls, color=gris, lw=1)
     ax[1].set_yscale("log"); ax[1].set_xscale("log")
     ax[1].set_xticks(NS); ax[1].set_xticklabels(NS); ax[1].minorticks_off()
     ax[1].set_yticks([1, 2, 5, 10, 20, 50]); ax[1].set_yticklabels([1, 2, 5, 10, 20, 50])
-    ax[1].set_xlabel("n"); ax[1].set_ylabel("speedup"); ax[1].set_title("p = 48: medido y cota de Amdahl")
-    ax[1].legend(fontsize=6.5)
-    fig.tight_layout(); fig.savefig(OUT + "entrada_amdahl.png", bbox_inches="tight"); plt.close()
-
-
-def fig_producto(datos):
-    fig, ax = plt.subplots(1, 2, figsize=(10, 3.9), sharey=True)
-    k = ["algoritmo", "n", "procesos"]
-    for a, (eq, (ram, arc, c, mk)) in zip(ax, datos.items()):
-        M = cargar(ram).merge(cargar(arc), on=k, suffixes=("_ram", "_arc"))
-        M["cociente"] = M.mediana_s_arc / M.mediana_s_ram
-        pmax = M.procesos.max()
-        for alg, etiqueta, col in ALGS:
-            for p, ls in [(1, ":"), (pmax, "-")]:
-                d = M[(M.algoritmo == alg) & (M.procesos == p)].sort_values("n")
-                a.plot(d.n, d.cociente, ls, marker="o", ms=3, color=col, label=f"{etiqueta}, p={p}")
-        a.axhline(1, ls="--", color="#5f5e58"); a.set_xscale("log")
-        a.set_xticks(NS); a.set_xticklabels(NS); a.minorticks_off()
-        a.set_xlabel("n"); a.set_title(eq); a.legend(fontsize=6.5, ncol=2)
-    ax[0].set_ylabel("T(archivo) / T(RAM), producto")
-    fig.tight_layout(); fig.savefig(OUT + "entrada_producto_archivo_vs_ram.png", bbox_inches="tight"); plt.close()
+    ax[1].set_xlabel("n"); ax[1].set_ylabel("speedup de la corrida completa"); ax[1].set_title("p = 48: efecto de n")
+    h = [Line2D([], [], color=col, marker=mkr, ls="-", ms=5, label=nombre[alg]) for alg, (col, mkr) in estilo.items()]
+    h += [Line2D([], [], color=gris, ls="--", label="entrada generada en RAM"),
+          Line2D([], [], color=gris, ls="-", label="entrada leída de archivo"),
+          Line2D([], [], color=gris, lw=1, label="línea gris fina: cota de Amdahl 1/f")]
+    fig.legend(handles=h, loc="lower center", ncol=5, fontsize=8, bbox_to_anchor=(0.5, -0.02))
+    fig.tight_layout(rect=(0, 0.08, 1, 1)); fig.savefig(OUT + "entrada_amdahl.png", bbox_inches="tight"); plt.close()
 
 
 def main():
     datos = EQUIPOS
     t = tabla(datos)
     t.to_csv(R + "comparacion_entrada_archivo.csv", index=False, float_format="%.6g")
-    fig_entrada(datos, t); fig_amdahl(datos); fig_producto(datos)
+    fig_entrada(datos, t); fig_amdahl(datos)
     pd.set_option("display.width", 250, "display.max_columns", 30)
     print(t.round(3).to_string())
 

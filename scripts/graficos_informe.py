@@ -35,15 +35,14 @@ def por_p(col,fname,ylabel,title,ideal=False,ns=(1000,5000,10000)):
 por_p("speedup_p1","speedup_vs_p.png","speedup relativo a p = 1","Speedup relativo al propio algoritmo con un proceso (servidor, 48 cores)",ideal=True)
 por_p("eficiencia_p1","eficiencia_vs_p.png","eficiencia relativa = S_rel/p","Eficiencia relativa al propio algoritmo con un proceso (servidor, 48 cores)")
 por_p("speedup_mejor_serial","speedup_abs_vs_p.png","speedup absoluto = T_serial/T(p)","Speedup absoluto respecto del mejor serial (ikj con blocking) (servidor, 48 cores)",ideal=True)
-por_p("eficiencia_mejor_serial","eficiencia_abs_vs_p.png","eficiencia absoluta = S_abs/p","Eficiencia absoluta respecto del mejor serial (servidor, 48 cores)")
 
-for col,fname,yl,tt in [("eficiencia_p1","eficiencia_vs_n.png","eficiencia relativa = S_rel/p","Efecto del tamaño del problema sobre la eficiencia relativa"),
-                        ("eficiencia_mejor_serial","eficiencia_abs_vs_n.png","eficiencia absoluta = S_abs/p","Efecto del tamaño del problema sobre la eficiencia absoluta")]:
+for col,fname,yl,tt in [("speedup_mejor_serial","speedup_abs_vs_n.png","speedup absoluto = T_serial/T(p)","Efecto del tamaño del problema sobre el speedup absoluto")]:
     fig,ax=plt.subplots(1,2,figsize=(10,3.8),sharey=True)
     for a,p in zip(ax,[16,48]):
         for alg,(c,mk,l) in EST.items():
             d=m[(m.algoritmo==alg)&(m.procesos==p)].sort_values("n")
             a.plot(d.n,d[col],marker=mk,color=c,label=l)
+        if col.startswith("speedup"): a.axhline(p,ls="--",color="#5f5e58",label=f"ideal (S = {p})")
         a.set_xscale("log");a.set_xlabel("n");a.set_title(f"p = {p}")
         a.set_xticks([500,1000,2000,5000,10000]);a.set_xticklabels([500,1000,2000,5000,10000])
     ax[0].set_ylabel(yl);ax[0].legend(fontsize=8)
@@ -62,14 +61,6 @@ ax[1].axhline(16,ls="--",color="#5f5e58",label="ideal (p = 16)")
 ax[1].set_xscale("log");ax[1].set_xticks([500,1000,2000,5000,10000]);ax[1].set_xticklabels([500,1000,2000,5000,10000])
 ax[1].set_xlabel("n");ax[1].set_ylabel("speedup frente al mejor serial");ax[1].set_title("1D · ikj con blocking, p = 16");ax[1].set_ylim(0,18);ax[1].legend(fontsize=8,loc="lower right")
 fig.tight_layout();fig.savefig(OUT+"amdahl_karp_flatt.png",bbox_inches="tight");plt.close()
-
-fig,ax=plt.subplots(figsize=(5.5,3.8))
-for alg in ["mpi_ikj_bloqueado","ref_pdgemm"]:
-    c,mk,l=EST[alg]
-    d=m[(m.algoritmo==alg)&(m.procesos==16)].sort_values("n")
-    ax.plot(d.n,d.sobrecosto_por_n2_ns,marker=mk,color=c,label=l)
-ax.set_xlabel("n");ax.set_ylabel("sobrecosto / n²  (ns)");ax.set_title("Sobrecosto paralelo normalizado, p = 16");ax.legend(fontsize=8)
-fig.tight_layout();fig.savefig(OUT+"sobrecosto_n2.png",bbox_inches="tight");plt.close()
 
 fig,ax=plt.subplots(figsize=(6,3.8))
 for alg,(c,mk,l) in EST.items():

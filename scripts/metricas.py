@@ -29,7 +29,7 @@ def calcular(d):
         filas.append(dict(algoritmo=alg, n=n, procesos=p, reps=len(t),
                           mediana_s=med, mad_s=m, mad_rel=m / med, min_s=t.min(), max_s=t.max(),
                           gflops=float(g.gflops.median()), generacion_s=gen,
-                          fraccion_generacion=gen / (gen + med), razon_generacion_ejecucion=gen / med))
+                          fraccion_generacion=gen / (gen + med)))
     r = pd.DataFrame(filas)
     med = r.set_index(["algoritmo", "n", "procesos"]).mediana_s
 
@@ -47,11 +47,11 @@ def calcular(d):
     for nombre, b in [("p1", "p1_s"), ("mejor_serial", "serial_mejor_s")]:
         s = r[b] / r.mediana_s
         r[f"speedup_{nombre}"] = s.where(mpi)
-        r[f"eficiencia_{nombre}"] = (s / r.procesos).where(mpi)
+        if nombre == "p1":
+            r["eficiencia_p1"] = (s / r.procesos).where(mpi)
     S, p = r.speedup_p1, r.procesos
     r["fraccion_serial_karp_flatt"] = ((1 / S - 1 / p) / (1 - 1 / p)).where(mpi & (p > 1))
     r["sobrecosto_paralelo_s"] = (r.mediana_s - r.p1_s / p).where(mpi & (p > 1))
-    r["sobrecosto_por_n2_ns"] = r.sobrecosto_paralelo_s / r.n ** 2 * 1e9
     r["speedup_con_generacion_mejor_serial"] = ((r.generacion_s + r.serial_mejor_s) / (r.generacion_s + r.mediana_s)).where(mpi)
     r["tiempo_relativo_pdgemm"] = r.mediana_s / r.t_ref_s
     return r.drop(columns=["p1_s", "t_ref_s"]).sort_values(["algoritmo", "n", "procesos"])

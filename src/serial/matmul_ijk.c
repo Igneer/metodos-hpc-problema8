@@ -1,25 +1,4 @@
-/*
- * matmul_ijk.c
- *
- * Multiplicacion secuencial C = A * B (A: N x M, B: M x P, C: N x P)
- * usando el orden de loops ijk ("de libro"). Se deja como programa
- * aparte solo como punto de comparacion contra matmul_ikj.c: mismo
- * algoritmo O(n*m*p), mismos datos, distinto patron de acceso a
- * memoria.
- *
- * N, M, P son constantes de compilacion (ver src/common/config.h),
- * no parametros de linea de comandos: las matrices son estaticas
- * (viven en BSS, no en el heap), asi que el tamanio tiene que
- * conocerse al compilar. Para otro tamanio, recompilar con
- * -DN=... -DM=... -DP=... (el Makefile lo expone como SIZE=...).
- *
- * Uso:
- *   matmul_ijk [--semilla S] [--repeticiones R] [--csv]
- *
- * Ejemplos:
- *   ./matmul_ijk --repeticiones 10
- *   ./matmul_ijk --csv > resultados_ijk.csv
- */
+#include "../common/timing.h" /* primero: define _POSIX_C_SOURCE antes de <stdio.h> */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,8 +6,8 @@
 
 #include "../common/cli.h"
 #include "../common/config.h"
+#include "../common/kernels.h"
 #include "../common/matrix.h"
-#include "../common/timing.h"
 
 /* Matrices estaticas: tamanio fijo conocido en tiempo de compilacion,
  * reservadas en el segmento estatico del programa (no malloc/free,
@@ -36,31 +15,6 @@
 static real_t A[(size_t)N * M];
 static real_t B[(size_t)M * P];
 static real_t C[(size_t)N * P];
-
-/* ---------------------------------------------------------------------
- * Multiplicacion ijk (orden "de libro"): para cada C[i][j] recorre k.
- *
- * Acceso a b: b[k*p + j] con k variando en el loop intermedio -> salta
- * de a `p` elementos (stride = p*sizeof(real_t)) en cada paso de k.
- * Eso es un acceso "por columnas" de una matriz almacenada por filas:
- * cada acceso cae probablemente en una linea de cache distinta -> un
- * cache miss casi por cada elemento de b leido. Comparar los tiempos
- * de este programa contra matmul_ikj.c es justamente la evidencia
- * empirica de por que el orden de loops importa para la localidad
- * de cache (ver el comentario largo en matmul_ikj.c).
- * ------------------------------------------------------------------- */
-static void multiplicar_ijk(const real_t *restrict a, const real_t *restrict b,
-                             real_t *restrict c, int n, int m, int p) {
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < p; j++) {
-            real_t acumulador = 0.0;
-            for (int k = 0; k < m; k++) {
-                acumulador += a[(size_t)i * m + k] * b[(size_t)k * p + j];
-            }
-            c[(size_t)i * p + j] = acumulador;
-        }
-    }
-}
 
 int main(int argc, char **argv) {
     char info_tamanio[64];
@@ -71,36 +25,24 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    matriz_llenar_aleatoria(A, N, M, config.semilla);
-    matriz_llenar_aleatoria(B, M, P, config.semilla + 1);
-
-    double flops = 2.0 * (double)N * (double)M * (double)P;
-
-    if (config.csv) {
-        printf("n,m,p,algoritmo,repeticion,segundos,gflops\n");
-    } else {
-        printf("N=%d M=%d P=%d algoritmo=ijk repeticiones=%d\n",
-               N, M, P, config.repeticiones);
+    double t_gen0 = ahora_segundos();
+    if (cli_cargar_matrices(&config, A, B, N, M, P) != 0) {
+        return 1;
     }
+    double segundos_generacion = ahora_segundos() - t_gen0;
 
-    /* Cada repeticion corre la multiplicacion completa y se imprime
-     * como dato crudo (una linea por corrida). La agregacion
-     * estadistica (mediana, desvio) sobre estas corridas es
-     * responsabilidad de un script externo de analisis (fase de
-     * diseno experimental), no de este binario. */
+    cli_imprimir_encabezado(&config, "ijk", NULL, 0, N, M, P);
+
     for (int r = 0; r < config.repeticiones; r++) {
         matriz_poner_cero(C, N, P);
         double t0 = ahora_segundos();
         multiplicar_ijk(A, B, C, N, M, P);
         double t1 = ahora_segundos();
-        double transcurrido = t1 - t0;
-        double gflops = flops / transcurrido / 1e9;
 
-        if (config.csv) {
-            printf("%d,%d,%d,ijk,%d,%.9f,%.4f\n",
-                   N, M, P, r, transcurrido, gflops);
-        } else {
-            printf("repeticion %d: %.6f s (%.3f GFLOPS)\n", r, transcurrido, gflops);
+        cli_imprimir_repeticion(&config, "ijk", 0, N, M, P, r,
+                                t1 - t0, segundos_generacion);
+        if (config.imprimir) {
+            matriz_imprimir(C, N, P);
         }
     }
 

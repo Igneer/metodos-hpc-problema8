@@ -1,3 +1,9 @@
 bin/
 *.o
 *.exe
+.atl/
+.vscode/
+resultados/**/graficas/
+tests/datos/A_*.txt
+tests/datos/B_*.txt
+__pycache__/

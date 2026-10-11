@@ -22,7 +22,7 @@ TAMANIOS = [1000, 2000, 3000, 5000]
 REPETICIONES = 10
 SEMILLA = 42
 
-CFLAGS = ["-std=c11", "-Wall", "-Wextra", "-O3", "-march=native", "-funroll-loops"]
+CFLAGS = ["-std=gnu11", "-O3", "-march=native"]
 
 
 def compilar(algoritmo, fuente, n):

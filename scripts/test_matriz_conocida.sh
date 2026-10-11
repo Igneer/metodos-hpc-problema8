@@ -17,7 +17,7 @@ mkdir -p "$BIN_DIR"
 
 MATRIZ_A="$RAIZ/tests/datos/matriz_a_4x4.txt"
 MATRIZ_B="$RAIZ/tests/datos/matriz_b_4x4.txt"
-CFLAGS="-std=c11 -O2 -DN=4 -DM=4 -DP=4"
+CFLAGS="-std=gnu11 -O3 -march=native -DN=4 -DM=4 -DP=4"
 ARGS=(--archivo-a "$MATRIZ_A" --archivo-b "$MATRIZ_B" --repeticiones 1 --imprimir)
 
 # C = A*B calculada a mano, fila por fila. Ejemplo, C[0][0] =

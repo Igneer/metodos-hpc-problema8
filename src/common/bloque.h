@@ -21,7 +21,7 @@ typedef struct {
     int bi, bk, bj;
 } TamanioBloque;
 
-static TamanioBloque bloque_calcular(void) {
+static inline TamanioBloque bloque_calcular(void) {
     TamanioBloque t = {BI, BK, BJ};
     return t;
 }

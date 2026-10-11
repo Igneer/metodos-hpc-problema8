@@ -4,6 +4,7 @@
 #include "../common/cli.h"
 #include "../common/bloque.h"
 #include "../common/config.h"
+#include "../common/kernels.h"
 #include "../common/matrix.h"
 #include "../common/particiones.h"
 
@@ -19,41 +20,6 @@ static int sendcounts[MAX_PROCESOS];
 static int displs[MAX_PROCESOS];
 static int recvcounts_C[MAX_PROCESOS];
 static int displs_C[MAX_PROCESOS];
-
-static int min_int(int a, int b) {
-    return a < b ? a : b;
-}
-
-/* Version bloqueada de ikj: los tres loops externos (ii, jj, kk)
-   recorren en bloques BI x BK x BJ; el cuerpo interno es el mismo ikj
-   de siempre, acotado al bloque actual. c debe venir en cero. */
-static void multiplicar_ikj_bloqueada(const real_t *restrict a,
-                                       const real_t *restrict b,
-                                       real_t *restrict c,
-                                       int n, int m, int p,
-                                       TamanioBloque tb) {
-    const int bi = tb.bi, bk = tb.bk, bj = tb.bj;
-    for (int ii = 0; ii < n; ii += bi) {
-        int i_fin = min_int(ii + bi, n);
-        for (int jj = 0; jj < p; jj += bj) {
-            int j_fin = min_int(jj + bj, p);
-            for (int kk = 0; kk < m; kk += bk) {
-                int k_fin = min_int(kk + bk, m);
-
-                for (int i = ii; i < i_fin; i++) {
-                    real_t *restrict fila_c = c + (size_t)i * p;
-                    for (int k = kk; k < k_fin; k++) {
-                        const real_t a_ik = a[(size_t)i * m + k];
-                        const real_t *restrict fila_b = b + (size_t)k * p;
-                        for (int j = jj; j < j_fin; j++) {
-                            fila_c[j] += a_ik * fila_b[j];
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 int main(int argc, char *argv[]) {
     int rank, size;

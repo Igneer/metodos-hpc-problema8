@@ -3,6 +3,7 @@
 
 #include "../common/cli.h"
 #include "../common/config.h"
+#include "../common/kernels.h"
 #include "../common/matrix.h"
 #include "../common/particiones.h"
 
@@ -18,19 +19,6 @@ static int sendcounts[MAX_PROCESOS];
 static int displs[MAX_PROCESOS];
 static int recvcounts_C[MAX_PROCESOS];
 static int displs_C[MAX_PROCESOS];
-
-static void multiplicar_ijk(const real_t *restrict a, const real_t *restrict b,
-                             real_t *restrict c, int n, int m, int p) {
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < p; j++) {
-            real_t acumulador = 0.0;
-            for (int k = 0; k < m; k++) {
-                acumulador += a[(size_t)i * m + k] * b[(size_t)k * p + j];
-            }
-            c[(size_t)i * p + j] = acumulador;
-        }
-    }
-}
 
 int main(int argc, char *argv[]) {
     int rank, size;

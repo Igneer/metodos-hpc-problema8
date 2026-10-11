@@ -28,24 +28,24 @@ El análisis de resultados, realizado en un equipo de 48 cores y 192 GB de RAM, 
 | [4. Partición unidimensional (1D)](#4-partición-unidimensional-1d) | Estrategia, aplicación a las versiones seriales, beneficios y limitaciones. |
 | [5. Partición bidimensional y el algoritmo SUMMA](#5-partición-bidimensional-y-el-algoritmo-summa) | Distribución 2D, algoritmo SUMMA con ejemplo paso a paso y alcance del proyecto. |
 | [6. ScaLAPACK como referencia de la distribución 2D](#6-scalapack-como-referencia-de-la-distribución-2d) | Elección de la biblioteca, correspondencia función a función con SUMMA, optimizaciones y el truco del orden *column-major*. |
-| [7. Análisis de resultados](#7-análisis-de-resultados) | Métricas, gráficos, ley de Amdahl, efecto de $p$ y de $n$, contraste con los datos propios y comparación con entrada desde archivo (7.4), un bloque mayor (7.10), segundo equipo (7.11) y límite de memoria (7.12). |
+| [7. Análisis de resultados](#7-análisis-de-resultados) | Métricas, gráficos, ley de Amdahl, efecto de $p$ y de $n$, contraste con los datos propios y comparación con entrada desde archivo (7.4), un bloque mayor (7.10), y segundo equipo (7.11). |
 | [8. Mejoras, líneas a evaluar y perspectivas](#8-mejoras-líneas-a-evaluar-y-perspectivas) | Mejoras derivadas de los resultados, técnicas a evaluar (solapamiento, paginación, distribución dinámica) y perspectivas (clústeres, GPU, SLATE y cuBLASMp). |
 | [9. Bibliografía](#9-bibliografía) | Fuentes citadas. |
 
 ## Entornos de medición
 
-| | Serial (capítulo 2) | Paralelo (capítulos 4 a 7) | Replicación (secciones 7.11 y 7.12) |
+| | Serial (capítulo 2) | Paralelo (capítulos 4 a 7) | Replicación (sección 7.11) |
 |---|---|---|---|
 | Procesador | Intel Core Ultra 9 185H @ 2,5 GHz | AMD EPYC 7B12 | Intel Core i5-7400 @ 3,0 GHz (sin SMT) |
 | Cores | 16 | 48 | 4 |
 | RAM | 24 GB | 192 GB | 12 GB |
 | Compilador y opciones | `gcc 15.2.0` (MSYS2), `-std=gnu11 -O3 -march=native` | `gcc 15.2.0`, `-std=gnu11 -O3 -march=native -mcmodel=medium` | `gcc 11.4.0`, mismas opciones |
-| Repeticiones por punto | 10 | 10 si $n \le 2000$, 5 si $n \gt  2000$ | igual; 5 con $n = 15\,000$ |
+| Repeticiones por punto | 10 | 10 si $n \le 2000$, 5 si $n \gt  2000$ | igual |
 | Estadístico | mediana (y desvío) | mediana (y desviación absoluta mediana) | igual |
 
 Con cada equipo se hicieron dos corridas: una con las matrices generadas en memoria (secciones 7.1 a 7.3 y 7.5 a 7.12) y otra leyéndolas de archivos de texto con la caché del sistema vacía (sección 7.4). La segunda usa $p \in \{ 1, 2, 4, 8, 16, 32, 48\}$ en el EPYC y $p \in \{ 1, 2, 4\}$ en el i5-7400.
 
-Los tamaños barridos en el equipo de 48 cores fueron $n \in \{ 500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000\}$ y $p \in \{ 1, 2, 4, 6, 8, 12, 16, 24, 32, 48\}$. En el i5-7400 se barrieron los mismos $n$ con $p \in \{ 1, 2, 4\}$ y, aparte, $n = 15\,000$. En todos los casos las matrices son cuadradas, de doble precisión (8 bytes por elemento) y generadas con semilla fija.
+Los tamaños barridos en el equipo de 48 cores fueron $n \in \{ 500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000\}$ y $p \in \{ 1, 2, 4, 6, 8, 12, 16, 24, 32, 48\}$. En el i5-7400 se barrieron los mismos $n$ con $p \in \{ 1, 2, 4\}$. En todos los casos las matrices son cuadradas, de doble precisión (8 bytes por elemento) y generadas con semilla fija.
 
 ## Organización del repositorio
 
@@ -619,7 +619,7 @@ Esto resuelve los dos problemas del capítulo anterior.
 
 Desaparece la *memory wall*: matrices que no caben en un nodo caben en el conjunto de la grilla.
 
-Esta es una propiedad del algoritmo. El programa de referencia que se usa en este trabajo (capítulo 6) conserva las matrices completas en el rank 0, que es quien lee o genera la entrada y recolecta *C*, de modo que ese proceso no alcanza el valor de $3n^2/p$. La sección 7.13 cuantifica la diferencia con mediciones de memoria.
+Esta es una propiedad del algoritmo. El programa de referencia que se usa en este trabajo (capítulo 6) conserva las matrices completas en el rank 0, que es quien lee o genera la entrada y recolecta *C*, de modo que ese proceso no alcanza el valor de $3n^2/p$. La sección 7.12 cuantifica la diferencia con mediciones de memoria.
 
 **Comunicación.** Un proceso solo necesita, para su loseta de *C*, la franja de filas de *A* de su fila de la grilla y la franja de columnas de *B* de su columna de la grilla. Recibe en total $n^2\left(\frac{1}{P_r} + \frac{1}{P_c}\right)$ elementos, que para una grilla casi cuadrada es del orden de $2n^2/\sqrt{p}$. Con $p = 48$ (grilla de $6 \times 8$ ) cada proceso recibe aproximadamente $0{,}29 \cdot n^2$ elementos, frente a los $1{,}02 \cdot n^2$ de la partición 1D. Y la relación entre cómputo y comunicación mejora de $2n/(p+1)$ a aproximadamente $n/\sqrt{p}$:
 
@@ -1215,7 +1215,7 @@ Se compara la versión 1D propia con la referencia 2D (`PDGEMM`) con $p = 48$:
 La versión 1D con blocking es **más rápida que `PDGEMM`** para $n \le 1000$ (donde la sobrecarga de BLACS y la redistribución de `PDGEMM` pesan más) y queda a entre 1,2 y 1,4 veces para $1500 \le n \le 5000$. En $n = 7500$ y $n = 10\,000$ ambas son equivalentes (razón de 0,99 y 1,08). Que una implementación propia de pocas líneas quede cerca de la biblioteca de referencia es un resultado positivo; pero hay que interpretarlo con cuidado por tres razones:
 
 1. **No es una comparación aislada de la partición.** `PDGEMM` usa el `DGEMM` de OpenBLAS, un kernel local unas 3,4 veces más rápido que el nuestro (47 frente a 14 GFLOPS con un proceso). Con el mismo kernel local, la teoría del capítulo 5 anticipa una ventaja del esquema 2D que aquí queda enmascarada.
-2. **El equipo es un único nodo con 192 GB.** La limitación que la partición 2D resuelve —la memoria de *B* replicada— no es vinculante: 38 GB de copias caben en la memoria disponible. El beneficio de SUMMA aparece cuando la matriz no cabe en un nodo o cuando la red es el cuello de botella (la sección 7.13 mide la memoria por proceso de ambas versiones).
+2. **El equipo es un único nodo con 192 GB.** La limitación que la partición 2D resuelve —la memoria de *B* replicada— no es vinculante: 38 GB de copias caben en la memoria disponible. El beneficio de SUMMA aparece cuando la matriz no cabe en un nodo o cuando la red es el cuello de botella (la sección 7.12 mide la memoria por proceso de ambas versiones).
 3. **`PDGEMM` también muestra mesetas** (con $n = 10\,000$, entre $p = 4$ y $p = 8$ el tiempo prácticamente no mejora: 15,3 s a 14,8 s). No se estudió la causa; podría deberse a la forma de la grilla elegida o a contención de memoria, pero no se verificó.
 
 Visto en términos de speedup absoluto contra el mejor serial, con 48 procesos y $n = 10\,000$ la versión 1D con blocking logra 23,4 y `PDGEMM` 25,4; el máximo de `PDGEMM` es 34,0 con $n = 5000$, donde supera a nuestra versión en un 40 %. Es notable que, para $n \ge 7500$, ambas implementaciones se estabilizan en torno a 330-350 GFLOPS, lo que sugiere un techo común del equipo con 48 procesos (por ancho de banda de memoria o frecuencia; no se verificó). La diferencia está dentro de lo esperable si se considera que `PDGEMM` parte de un kernel mucho más eficiente: la partición 2D con SUMMA no se aprovecha en su máximo en este entorno, y su valor se vería en matrices que superan la memoria de un nodo, en la ejecución multinodo o con GPU (capítulo 8). Como indica la regla de ingeniería habitual, si las matrices caben en un solo nodo conviene un BLAS de memoria compartida (OpenBLAS, cuBLAS, MAGMA) antes que una biblioteca distribuida.
@@ -1239,7 +1239,7 @@ Visto en términos de speedup absoluto contra el mejor serial, con 48 procesos y
 | ¿Dónde se degrada la eficiencia? | Con $n = 10\,000$ cae por debajo de 0,85 desde $p \approx 16$ y llega a 0,48 con $p = 48$; con $n = 1000$ ya es 0,49 con $p = 16$. |
 | ¿Por qué? | Costo de comunicación y de contención de memoria que no disminuye con $p$ (ley de Amdahl; Karp-Flatt no constante), más la generación serial de las matrices. |
 | ¿Qué efecto tiene $n$? | A mayor $n$, mejor relación cómputo/comunicación y mejor eficiencia ( $E$ de 0,37 a 0,85 con $p = 16$ entre $n = 500$ y $n = 10\,000$ ). |
-| ¿1D o 2D? | En un nodo con mucha memoria, la 1D bloqueada iguala a `PDGEMM` en tiempo absoluto para $n \ge 7500$; la ventaja de la 2D es estructural (memoria y comunicación por proceso) y se hace relevante a mayor escala. En el i5-7400 (12 GB) la 1D con $n = 15\,000$ y $p = 4$ agotó la memoria (sección 7.12). |
+| ¿1D o 2D? | En un nodo con mucha memoria, la 1D bloqueada iguala a `PDGEMM` en tiempo absoluto para $n \ge 7500$; la ventaja de la 2D es estructural (memoria y comunicación por proceso) y se hace relevante a mayor escala. |
 | ¿Se repiten las conclusiones en otro equipo? | Sí, en lo cualitativo: el kernel serial rinde igual (13,5 frente a 13,9 GFLOPS), `ikj` sin blocking no escala y el blocking 1D mantiene $E \ge 0{,}90$ con $p = 4$ (sección 7.11). |
 | ¿Qué pasa si las matrices se leen de archivo? | La lectura cuesta 11–16 veces más que generarlas y es serial: con $n = 10\,000$ y $p = 48$ ocupa el 89 % de la corrida de blocking 1D, la cota de Amdahl baja de 49,5 a 4,2 y el speedup de la corrida completa de 15,7 a 3,2 (de 16,6 a 2,7 con `PDGEMM`). La lectura puede paralelizarse en MPI; no se implementó (sección 7.4). |
 
@@ -1338,30 +1338,7 @@ Lo que muestran los datos:
 
 En resumen, las conclusiones cualitativas de la sección 7.9 se repiten en un equipo distinto: el kernel local es lo que más importa, el blocking escala y `ikj` sin blocking no. Lo que cambia es la brecha con `PDGEMM`, que en el equipo de 4 cores es menor.
 
-### 7.12 El límite de memoria de la partición 1D ( $n = 15\,000$ )
-
-En las versiones 1D cada proceso mantiene una copia completa de *B*, de modo que la memoria total crece con $p$. En el EPYC (192 GB) esto no limita; en el i5-7400 (12 GB) sí. Para observarlo se midió $n = 15\,000$ (1,8 GB por matriz) con $p \in \{ 1, 2, 4\}$ y 5 repeticiones. Los datos están en `resultados/server_i5_7400_cruce_ram/`. «RAM estimada» es la estimación que hace el script de benchmark antes de lanzar la corrida, como fracción de los 12 GB; el máximo residente es el que midió el sistema.
-
-**Tabla 7.10.** Corridas con $n = 15\,000$:
-
-| Versión | $p$ | RAM estimada / 12 GB | Estado | $T$ mediana (s) | GFLOPS | Máx. residente (GB) |
-|---|--:|--:|---|--:|--:|--:|
-| `ikj` serial | 1 | 0,42 | ok | 1311,9 | 5,15 | 5,3 |
-| `ikj` blocking serial | 1 | 0,42 | ok | 530,8 | 12,72 | 5,3 |
-| `ikj` 1D | 1 | 0,70 | ok | 1321,0 | 5,11 | 8,8 |
-| `ikj` 1D | 2 | 0,84 | ok | 937,1 | 7,20 | 7,0 |
-| `ikj` 1D | 4 | **1,12** | **terminada por falta de memoria (OOM, `rc=137`)** | — | — | — |
-
-Lo que muestran los datos:
-
-- **Con $p = 4$ el sistema termina el proceso** tras 1039 s y 3857 fallos mayores de página (con $p = 1$ y $p = 2$ fueron 7). Los fallos mayores indican que el sistema empezó a paginar a disco antes de matar el proceso. Es la confirmación empírica del límite descrito en 7.7: con la partición 1D la memoria total necesaria supera la RAM del nodo antes de que se agoten los cores.
-- **Lo que sí terminó escala poco.** `ikj` 1D con $p = 2$ tarda 937 s contra 1321 s con $p = 1$ (speedup 1,41, $E = 0{,}70$ ). Contra el mejor serial (blocking, 531 s) es más lento: $S_{abs} = 0{,}57$.
-- **El kernel serial mantiene su rendimiento al crecer $n$:** 12,7 GFLOPS con blocking y 5,15 sin él, frente a 13,5 y 5,8 con $n = 10\,000$.
-- **Faltan datos.** La corrida de `ikj` blocking 1D con $n = 15\,000$ figura iniciada en `benchmark_cruce_ram.log` pero no tiene filas en `crudo.csv`, por lo que no se la analiza; tampoco se midió `PDGEMM` con este $n$.
-
-Este resultado es el argumento empírico más concreto a favor de la partición 2D del capítulo 5: en SUMMA cada proceso guarda solo bloques de *A*, *B* y *C* y la memoria por proceso baja con $p$ en lugar de mantenerse. Esa ventaja no pudo comprobarse aquí por no haberse medido `PDGEMM` con $n = 15\,000$; queda como trabajo pendiente. Lo que sí se midió es la memoria por proceso de ambas versiones con un tamaño menor, en la sección 7.13.
-
-### 7.13 Memoria por proceso: 1D frente a 2D
+### 7.12 Memoria por proceso: 1D frente a 2D
 
 Para contrastar la memoria de las dos particiones se midió el pico de memoria residente (RSS) de cada proceso con $n = 5000$, $p = 8$ y una repetición, en el servidor de 48 cores. Una matriz de $5000 \times 5000$ de `double` ocupa 200 MB. El pico se obtuvo con `resource.getrusage(RUSAGE_CHILDREN).ru_maxrss`, ejecutando cada rank bajo `mpirun`:
 
@@ -1374,7 +1351,7 @@ print('rank',os.environ['OMPI_COMM_WORLD_RANK'],':',resource.getrusage(resource.
 
 (Para la 2D se reemplaza el binario por `ref_pdgemm_5000`.)
 
-**Tabla 7.11.** Pico de RSS por proceso, $n = 5000$, $p = 8$:
+**Tabla 7.10.** Pico de RSS por proceso, $n = 5000$, $p = 8$:
 
 | | Raíz (rank 0) | Resto de procesos | Suma de los 8 procesos |
 |---|--:|--:|--:|
@@ -1408,7 +1385,7 @@ Las propuestas se agrupan según la evidencia que las respalda: primero las que 
 - **<i>B</i> (en 1D):** como todos necesitan la matriz completa, puede generarse **en cada proceso** con la misma semilla, reemplazando la difusión por una generación local redundante ( $O(n^2)$ de cómputo barato frente a $O(n^2)$ de comunicación costosa). En la versión 2D cada proceso genera solo su loseta.
 - **Reproducibilidad:** con un generador de números pseudoaleatorios *sin estado* (el valor de cada elemento es una función de $(i, j, \text{semilla})$ ) el resultado es idéntico para cualquier $p$ y cualquier partición, lo que permite validar sin mover datos.
 - **Verificación sin recolectar *C*:** comprobar el resultado con una norma o una suma de control obtenidas con `MPI_Reduce`, o con la verificación probabilística de Freivalds ( $ABx = C x$ para un vector aleatorio $x$, que cuesta $O(n^2)$ ), evita el `Gatherv` final cuando no se necesita *C* en una única máquina.
-- **Memoria del rank 0:** hoy el rank 0 mantiene las tres matrices completas ( $3n^2$ elementos, 600 MB con $n = 5000$; sección 7.13), y esa cifra fija el pico de memoria del nodo, que no baja al aumentar $p$. Si cada proceso genera o lee únicamente su loseta y *C* se verifica sin recolectarla, ningún proceso necesita una matriz global: el consumo por proceso pasa a $3n^2/p$ más los buffers de la biblioteca, también en el rank 0, y se obtiene en el programa la reducción de memoria que la partición 2D ofrece en el algoritmo (capítulo 5). Si *C* debe entregarse completa en un único proceso, ese proceso conserva $n^2$ elementos, un tercio de lo actual. No se implementó ni se midió.
+- **Memoria del rank 0:** hoy el rank 0 mantiene las tres matrices completas ( $3n^2$ elementos, 600 MB con $n = 5000$; sección 7.12), y esa cifra fija el pico de memoria del nodo, que no baja al aumentar $p$. Si cada proceso genera o lee únicamente su loseta y *C* se verifica sin recolectarla, ningún proceso necesita una matriz global: el consumo por proceso pasa a $3n^2/p$ más los buffers de la biblioteca, también en el rank 0, y se obtiene en el programa la reducción de memoria que la partición 2D ofrece en el algoritmo (capítulo 5). Si *C* debe entregarse completa en un único proceso, ese proceso conserva $n^2$ elementos, un tercio de lo actual. No se implementó ni se midió.
 - **Entrada/salida real:** si las matrices vienen de archivos, la lectura paralela con MPI-IO distribuye ese costo. La sección 7.4 lo cuantifica: leer en texto con `fscanf` cuesta 11–16 veces más que generar y reduce la cota de Amdahl de la corrida completa a 4,2 con $n = 10\,000$. Un formato binario, con cada proceso leyendo solo sus filas de *A* y una parte de *B* (armada con `Allgatherv`), atacaría directamente esa fracción serial.
 
 Con ello desaparece la fracción serial de generación, y la cota de Amdahl pasa a depender solo de la comunicación y la contención de memoria.
@@ -1424,7 +1401,7 @@ Con ello desaparece la fracción serial de generación, y la cota de Amdahl pasa
 Las tres técnicas siguientes son estándar en las bibliotecas modernas, pero **este trabajo no mide que mejoren el rendimiento en el caso estudiado** (matrices densas y cuadradas, procesadores idénticos, un solo nodo). Se presentan como líneas de exploración, con la condición bajo la cual valdría la pena cada una:
 
 - **Solapamiento de comunicación y cómputo:** solo ayudaría si la comunicación pesa lo suficiente. No se cronometró esa fase por separado (sección 7.8), así que no se sabe cuánto podría ocultarse.
-- **Paginación:** importa si la matriz no cabe en RAM (como el caso de $n = 15\,000$ de la sección 7.12) o si hay presión sobre la TLB; ninguno de los dos fue un cuello de botella medido en las corridas principales.
+- **Paginación:** importa si la matriz no cabe en RAM o si hay presión sobre la TLB; ninguno de los dos fue un cuello de botella medido en las corridas principales.
 - **Distribución dinámica:** con trabajo denso y uniforme el reparto estático ya es el adecuado, y uno dinámico solo agregaría sobrecosto. Su interés está en cargas irregulares o hardware heterogéneo.
 
 #### Solapamiento de comunicación y cómputo

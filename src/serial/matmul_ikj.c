@@ -5,6 +5,7 @@
 
 #include "../common/cli.h"
 #include "../common/config.h"
+#include "../common/kernels.h"
 #include "../common/matrix.h"
 
 /* Matrices estaticas: tamanio fijo conocido en tiempo de compilacion,
@@ -13,20 +14,6 @@
 static real_t A[(size_t)N * M];
 static real_t B[(size_t)M * P];
 static real_t C[(size_t)N * P];
-
-static void multiplicar_ikj(const real_t *restrict a, const real_t *restrict b,
-                             real_t *restrict c, int n, int m, int p) {
-    for (int i = 0; i < n; i++) {
-        real_t *restrict fila_c = c + (size_t)i * p;
-        for (int k = 0; k < m; k++) {
-            const real_t a_ik = a[(size_t)i * m + k];
-            const real_t *restrict fila_b = b + (size_t)k * p;
-            for (int j = 0; j < p; j++) {
-                fila_c[j] += a_ik * fila_b[j];
-            }
-        }
-    }
-}
 
 int main(int argc, char **argv) {
     char info_tamanio[64];

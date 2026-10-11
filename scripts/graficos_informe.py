@@ -34,7 +34,7 @@ def por_p(col,fname,ylabel,title,ideal=False,ns=(1000,5000,10000)):
     fig.suptitle(title,y=1.02);fig.tight_layout();fig.savefig(OUT+fname,bbox_inches="tight");plt.close()
 por_p("speedup_p1","speedup_vs_p.png","speedup relativo a p = 1","Speedup relativo al propio algoritmo con un proceso (servidor, 48 cores)",ideal=True)
 por_p("eficiencia_p1","eficiencia_vs_p.png","eficiencia relativa = S_rel/p","Eficiencia relativa al propio algoritmo con un proceso (servidor, 48 cores)")
-por_p("speedup_mejor_serial","speedup_abs_vs_p.png","speedup absoluto = T_serial/T(p)","Speedup absoluto respecto del mejor serial (ikj con blocking) (servidor, 48 cores)",ideal=True)
+por_p("speedup_mejor_serial","speedup_abs_vs_p.png","speedup absoluto = T_serial/T(p)","Speedup absoluto respecto del mejor serial (el más rápido entre ikj e ikj con blocking) (servidor, 48 cores)",ideal=True)
 
 for col,fname,yl,tt in [("speedup_mejor_serial","speedup_abs_vs_n.png","speedup absoluto = T_serial/T(p)","Efecto del tamaño del problema sobre el speedup absoluto")]:
     fig,ax=plt.subplots(1,2,figsize=(10,3.8),sharey=True)

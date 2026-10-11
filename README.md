@@ -28,7 +28,7 @@ El análisis de resultados, realizado en un equipo de 48 cores y 192 GB de RAM, 
 | [4. Partición unidimensional (1D)](#4-partición-unidimensional-1d) | Estrategia, aplicación a las versiones seriales, beneficios y limitaciones. |
 | [5. Partición bidimensional y el algoritmo SUMMA](#5-partición-bidimensional-y-el-algoritmo-summa) | Distribución 2D, algoritmo SUMMA con ejemplo paso a paso y alcance del proyecto. |
 | [6. ScaLAPACK como referencia de la distribución 2D](#6-scalapack-como-referencia-de-la-distribución-2d) | Elección de la biblioteca, correspondencia función a función con SUMMA, optimizaciones y el truco del orden *column-major*. |
-| [7. Análisis de resultados](#7-análisis-de-resultados) | Métricas, gráficos, ley de Amdahl, efecto de $p$ y de $n$, contraste con los datos propios y comparación con entrada desde archivo (7.4), un bloque mayor (7.10), y segundo equipo (7.11). |
+| [7. Análisis de resultados](#7-análisis-de-resultados) | Métricas, gráficos, ley de Amdahl, efecto de $p$ y de $n$, contraste con los datos propios y comparación con entrada desde archivo (7.3), un bloque mayor (7.10), y segundo equipo (7.11). |
 | [8. Mejoras, líneas a evaluar y perspectivas](#8-mejoras-líneas-a-evaluar-y-perspectivas) | Mejoras derivadas de los resultados, técnicas a evaluar (solapamiento, paginación, distribución dinámica) y perspectivas (clústeres, GPU, SLATE y cuBLASMp). |
 | [9. Bibliografía](#9-bibliografía) | Fuentes citadas. |
 
@@ -39,11 +39,12 @@ El análisis de resultados, realizado en un equipo de 48 cores y 192 GB de RAM, 
 | Procesador | Intel Core Ultra 9 185H @ 2,5 GHz | AMD EPYC 7B12 | Intel Core i5-7400 @ 3,0 GHz (sin SMT) |
 | Cores | 16 | 48 | 4 |
 | RAM | 24 GB | 192 GB | 12 GB |
-| Compilador y opciones | `gcc 15.2.0` (MSYS2), `-std=gnu11 -O3 -march=native` | `gcc 15.2.0`, `-std=gnu11 -O3 -march=native -mcmodel=medium` | `gcc 11.4.0`, mismas opciones |
+| Compilador y opciones | `gcc 15.2.0` (MSYS2), `-std=gnu11 -O3 -march=native` | `gcc 13.3.0`, `-std=gnu11 -O3 -march=native -mcmodel=medium` | `gcc 11.4.0`, mismas opciones |
+| MPI y ejecución | no aplica | Open MPI 4.1.6; `mpirun --bind-to core --map-by core -np p`; `OPENBLAS_NUM_THREADS=1` | Open MPI 4.1.2; igual |
 | Repeticiones por punto | 10 | 10 si $n \le 2000$, 5 si $n \gt  2000$ | igual |
 | Estadístico | mediana (y desvío) | mediana (y desviación absoluta mediana) | igual |
 
-Con cada equipo se hicieron dos corridas: una con las matrices generadas en memoria (secciones 7.1 a 7.3 y 7.5 a 7.12) y otra leyéndolas de archivos de texto con la caché del sistema vacía (sección 7.4). La segunda usa $p \in \{ 1, 2, 4, 8, 16, 32, 48\}$ en el EPYC y $p \in \{ 1, 2, 4\}$ en el i5-7400.
+Con cada equipo se hicieron dos corridas: una con las matrices generadas en memoria (todo el capítulo 7 salvo el apartado «Entrada desde archivo» de la sección 7.3) y otra leyéndolas de archivos de texto con la caché del sistema vacía (sección 7.3, apartado «Entrada desde archivo»). La segunda usa $p \in \{ 1, 2, 4, 8, 16, 32, 48\}$ en el EPYC y $p \in \{ 1, 2, 4\}$ en el i5-7400.
 
 Los tamaños barridos en el equipo de 48 cores fueron $n \in \{ 500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000\}$ y $p \in \{ 1, 2, 4, 6, 8, 12, 16, 24, 32, 48\}$. En el i5-7400 se barrieron los mismos $n$ con $p \in \{ 1, 2, 4\}$. En todos los casos las matrices son cuadradas, de doble precisión (8 bytes por elemento) y generadas con semilla fija.
 
@@ -315,7 +316,7 @@ C_{00} = \begin{pmatrix}
 \end{pmatrix}
 $$
 
-El resultado, $C_{00}$, coincide con la esquina superior izquierda de *C* calculada en el capítulo 1. Repetido para los cuatro bloques de *C* son $(n/b)^3 = 8$ productos de bloques, cada uno trabajando únicamente sobre $3 \times 4 = 12$ números, que es lo que debe caber en caché en cada momento. La corrección del kernel bloqueado se verificó con esta misma matriz de $4 \times 4$ (`scripts/test_matriz_conocida.sh`), con $b = 2$, con $b = 3$ (que no divide a 4, así que el último bloque es de un solo elemento) y con tamaños distintos por dimensión ( $b_i = 2$, $b_k = 3$, $b_j = 1$ ), tanto en la versión serial como en la MPI. Con el $b = 64$ por defecto la matriz cabe en un solo bloque y esa prueba no ejercita la partición.
+El resultado, $C_{00}$, coincide con la esquina superior izquierda de *C* calculada en el capítulo 1. Repetido para los cuatro bloques de *C* son $(n/b)^3 = 8$ productos de bloques, cada uno trabajando únicamente sobre $3 \times 4 = 12$ números, que es lo que debe caber en caché en cada momento. La corrección del kernel bloqueado se verificó con una matriz conocida de $4 \times 4$ ( $A$ con los enteros 1 a 16 por filas y $B$ con los enteros 16 a 1; `scripts/test_matriz_conocida.sh`), con $b = 2$, con $b = 3$ (que no divide a 4, así que el último bloque es de un solo elemento) y con tamaños distintos por dimensión ( $b_i = 2$, $b_k = 3$, $b_j = 1$ ), tanto en la versión serial como en la MPI. Con el $b = 64$ por defecto la matriz cabe en un solo bloque y esa prueba no ejercita la partición. El mismo script (`scripts/test_matriz_conocida.sh`) repite la verificación con dos matrices rectangulares guardadas en `tests/datos/` junto con su producto $C$ ($5 \times 3$ por $3 \times 7$, con bloques que no dividen a ninguna dimensión, y $2 \times 6$ por $6 \times 3$, con más procesos que filas), de modo que cubre dimensiones $N$, $M$ y $P$ distintas en las versiones seriales, MPI 1D y la referencia ScaLAPACK.
 
 **Por qué reduce el tráfico de memoria.** Con un modelo simplificado en el que un bloque que cabe en caché se carga una sola vez, cada bloque de *B* se trae $n/b$ veces (una por cada bloque de filas de *A*) en lugar de $n$ veces. En el ejemplo, *B* se lee 2 veces en lugar de 4; en general, el tráfico de *B* desde memoria principal se divide por el tamaño del bloque $b$. Cuanto mayor sea $b$, mayor es la reutilización, hasta el límite impuesto por la capacidad de la caché.
 
@@ -363,9 +364,9 @@ Lo que muestran los datos:
 
 Limitaciones que hay que tener presentes:
 
-- **Anomalía en $n=4000$, $b=160$.** En el servidor da 19,3 GFLOPS, un 18-19 % por encima de $b=144$ y $b=176$, reproducida en cuatro mediciones; en el portátil da 28,7, un 20 % por encima de $b=128$, mientras que con $n=1000$ y $n=2000$ no aparece. Que se repita en dos CPU distintas indica que depende de la combinación $n=4000$, $b=160$ y no del hardware, pero no se identificó el mecanismo. Como el serial bloqueado es la base del speedup de la versión MPI, un $b=160$ **inflaría el speedup en $n=4000$**; con $b=64$ no ocurre.
+- **Anomalía en $n=4000$, $b=160$.** En el servidor da 19,3 GFLOPS, un 18-19 % por encima de $b=144$ y $b=176$, reproducida en cinco mediciones, la última con 10 repeticiones; en el portátil da 28,7, un 20 % por encima de $b=128$, mientras que con $n=1000$ y $n=2000$ no aparece. Que se repita en dos CPU distintas indica que depende de la combinación $n=4000$, $b=160$ y no del hardware, pero no se identificó el mecanismo. Como el serial bloqueado es la base del speedup de la versión MPI, un $b=160$ **inflaría el speedup en $n=4000$**; con $b=64$ no ocurre. En la medición más reciente, $n=2000$ y $n=7500$ dieron 16,2 y 15,6 GFLOPS con $b=160$, es decir, el valor alto aparece solo con $n=4000$.
 - **Dos máquinas, un solo proceso.** Los barridos son de la versión serial; no se midió con varios procesos MPI compartiendo L3. El portátil tiene núcleos P y E, y el sistema operativo puede mover el proceso entre ellos, lo que agrega ruido a esas mediciones.
-- **El servidor podría rendir hasta ~10 % más** usando un $b$ de la meseta (por ejemplo `-DBLOQUE=160` o `192`). Es un ajuste posible, no incluido en los resultados del informe.
+- **El servidor podría rendir hasta ~10 % más** usando un $b$ de la meseta (por ejemplo `-DBLOQUE=160` o `192`). Es un ajuste posible, no incluido en los resultados del informe; además, con $b=160$ el rendimiento varió entre sesiones (sección 7.10).
 
 ### 2.4 Datos y entorno de la comparación
 
@@ -399,7 +400,7 @@ Se observan tres hechos que confirman la discusión anterior.
 
 Una observación metodológica: en $n = 2000$ la versión bloqueada muestra un desvío grande (barra de error en la figura), señal de interferencia en alguna de las corridas; por eso se usa la mediana y no el promedio.
 
-**Conclusión del capítulo.** La versión `ikj` con blocking es la base serial contra la que se mide el speedup en el resto del trabajo, y es también el kernel local de la versión paralela más eficiente (capítulo 4). Aun así, está lejos de lo que logran las bibliotecas especializadas, que combinan blocking en varios niveles de caché con empaquetado de datos, microkernels en ensamblador y vectorización; esas técnicas se describen en el capítulo 6 a propósito de OpenBLAS, que es el motor de cálculo local de ScaLAPACK.
+**Conclusión del capítulo.** La versión `ikj` con blocking es la base serial contra la que se mide el speedup en el resto del trabajo (en el servidor, con $n \le 1000$ el `ikj` sin blocking es algo más rápido y es la base en esos casos; ver sección 7.1), y es también el kernel local de la versión paralela más eficiente (capítulo 4). Aun así, está lejos de lo que logran las bibliotecas especializadas, que combinan blocking en varios niveles de caché con empaquetado de datos, microkernels en ensamblador y vectorización; esas técnicas se describen en el capítulo 6 a propósito de OpenBLAS, que es el motor de cálculo local de ScaLAPACK.
 
 
 ---
@@ -418,7 +419,7 @@ El modelo de ejecución es **SPMD** (*Single Program, Multiple Data*): se lanza 
 - **Obliga a pensar la partición de datos.** Con memoria compartida (OpenMP) el reparto del trabajo es casi trivial, porque todos los hilos ven las mismas matrices. Con MPI hay que decidir qué porción de *A*, *B* y *C* vive en cada proceso y qué hay que enviar, que es precisamente el objeto de estudio de este informe.
 - **Es la base de las bibliotecas de álgebra lineal distribuida** (ScaLAPACK usa MPI a través de BLACS; SLATE también), por lo que lo aprendido se aplica directamente a ellas.
 
-Aunque OpenBLAS puede paralelizar la multiplicación por sí mismo con hilos, para que la comparación sea objetiva y centrada en la distribución de datos, toda la paralelización de este trabajo se hace con procesos MPI (con un hilo de OpenBLAS por proceso).
+Aunque OpenBLAS puede paralelizar la multiplicación por sí mismo con hilos, para que la comparación sea objetiva y centrada en la distribución de datos, toda la paralelización de este trabajo se hace con procesos MPI (con un hilo de OpenBLAS por proceso, fijado con `OPENBLAS_NUM_THREADS=1`, de modo que $p$ procesos usan exactamente $p$ cores).
 
 ### 3.3 Conceptos básicos
 
@@ -623,12 +624,12 @@ Desaparece la *memory wall*: matrices que no caben en un nodo caben en el conjun
 
 Esta es una propiedad del algoritmo. El programa de referencia que se usa en este trabajo (capítulo 6) conserva las matrices completas en el rank 0, que es quien lee o genera la entrada y recolecta *C*, de modo que ese proceso no alcanza el valor de $3n^2/p$. La sección 7.12 cuantifica la diferencia con mediciones de memoria.
 
-**Comunicación.** Un proceso solo necesita, para su loseta de *C*, la franja de filas de *A* de su fila de la grilla y la franja de columnas de *B* de su columna de la grilla. Recibe en total $n^2\left(\frac{1}{P_r} + \frac{1}{P_c}\right)$ elementos, que para una grilla casi cuadrada es del orden de $2n^2/\sqrt{p}$. Con $p = 48$ (grilla de $6 \times 8$ ) cada proceso recibe aproximadamente $0{,}29 \cdot n^2$ elementos, frente a los $1{,}02 \cdot n^2$ de la partición 1D. Y la relación entre cómputo y comunicación mejora de $2n/(p+1)$ a aproximadamente $n/\sqrt{p}$:
+**Comunicación.** Un proceso solo necesita, para su loseta de *C*, la franja de filas de *A* de su fila de la grilla y la franja de columnas de *B* de su columna de la grilla. Recibe en total $n^2\left(\frac{1}{P_r} + \frac{1}{P_c}\right)$ elementos, que para una grilla casi cuadrada es del orden de $2n^2/\sqrt{p}$. Con $p = 48$ (grilla de $8 \times 6$ ) cada proceso recibe aproximadamente $0{,}29 \cdot n^2$ elementos, frente a los $1{,}02 \cdot n^2$ de la partición 1D. Y la relación entre cómputo y comunicación mejora de $2n/(p+1)$ a aproximadamente $n/\sqrt{p}$:
 
 | $n = 10\,000$, $p = 48$ | Operaciones por elemento recibido |
 |---|--:|
 | 1D | ≈ 408 |
-| 2D (grilla $6 \times 8$ ) | ≈ 1430 |
+| 2D (grilla $8 \times 6$ ) | ≈ 1430 |
 
 Es decir, el patrón de comunicación 2D es unas 3,5 veces más favorable en este caso, y la ventaja crece con $p$. Además, como las difusiones se restringen a una **fila** o a una **columna** de la grilla, ya no existe un único nodo que envíe datos a todos los demás.
 
@@ -827,7 +828,7 @@ Con $P_r = P_c = 2$ la dimensión compartida se recorre en dos etapas. En genera
 
 ### 5.3 Alcance del proyecto: la implementación propia
 
-La implementación propia de SUMMA se dejó **fuera del alcance** de este proyecto por su complejidad y por el tiempo de desarrollo que requería. No se trata solamente de escribir el bucle de difusiones: hay que construir la topología cartesiana de procesos y los comunicadores por fila y por columna, describir y transferir bloques no contiguos de una matriz, manejar cortes desiguales de la dimensión compartida y bloques vacíos cuando $n$ no es divisible por la grilla, y validar todo el conjunto contra una referencia. Es un trabajo de por sí comparable al de todo el resto del proyecto.
+En una etapa del proyecto se encaró una implementación propia de SUMMA, pero se la dejó de lado y quedó **fuera del alcance** por su complejidad y por el tiempo de desarrollo que requería. No se trata solamente de escribir el bucle de difusiones: hay que construir la topología cartesiana de procesos y los comunicadores por fila y por columna, describir y transferir bloques no contiguos de una matriz, manejar cortes desiguales de la dimensión compartida y bloques vacíos cuando $n$ no es divisible por la grilla, y validar todo el conjunto contra una referencia. Es un trabajo de por sí comparable al de todo el resto del proyecto.
 
 En su lugar se hizo un estudio de **qué bibliotecas utilizan este algoritmo en forma subyacente** y de qué funciones lo ejecutan, y se tomó a una de ellas como referencia 2D para el análisis experimental. La elección se explica en el capítulo siguiente.
 
@@ -976,7 +977,7 @@ En la llamada a `pdgemm_` el primer operando es *B* y el segundo *A* (orden inve
 
 ### 7.1 Diseño experimental y métricas
 
-Se midieron las tres implementaciones paralelas —`ikj` 1D, `ikj` con blocking 1D y `PDGEMM` (2D con ScaLAPACK)— en el equipo de 48 cores y 192 GB, para $n \in \{ 500, \dots, 10\,000\}$ y $p \in \{ 1, 2, 4, 6, 8, 12, 16, 24, 32, 48\}$, con 10 repeticiones ( $n \le 2000$ ) o 5 ( $n \gt  2000$ ) y reportando la mediana. Los tiempos del producto incluyen la distribución y la recolección de datos. El speedup absoluto se calcula contra la mejor versión serial medida **en el mismo equipo** (`ikj` con blocking).
+Se midieron las tres implementaciones paralelas —`ikj` 1D, `ikj` con blocking 1D y `PDGEMM` (2D con ScaLAPACK)— en el equipo de 48 cores y 192 GB, para $n \in \{ 500, \dots, 10\,000\}$ y $p \in \{ 1, 2, 4, 6, 8, 12, 16, 24, 32, 48\}$, con 10 repeticiones ( $n \le 2000$ ) o 5 ( $n \gt  2000$ ) y reportando la mediana. Los tiempos del producto incluyen la distribución y la recolección de datos. El speedup absoluto se calcula contra la más rápida de las dos versiones seriales medidas **en el mismo equipo** (`ikj` y `ikj` con blocking): el bloqueado desde $n = 1500$ y `ikj` sin blocking con $n = 500$ y $n = 1000$, donde *B* todavía entra en caché y el blocking solo agrega costo (con $n = 1000$: 0,104 s frente a 0,135 s).
 
 | Métrica | Definición | Qué mide |
 |---|---|---|
@@ -988,7 +989,7 @@ Se midieron las tres implementaciones paralelas —`ikj` 1D, `ikj` con blocking 
 
 **El speedup absoluto es la métrica principal de este análisis y el relativo es complementario.** Responden preguntas distintas:
 
-- **Absoluto, $S_{abs} = T_{ser}/T(p)$:** ¿cuánto más rápido que la mejor solución no paralela es esta implementación con $p$ procesos? Usa **la misma base para todas** (el mejor serial, `ikj` con blocking), por lo que es la única métrica que permite comparar implementaciones entre sí.
+- **Absoluto, $S_{abs} = T_{ser}/T(p)$:** ¿cuánto más rápido que la mejor solución no paralela es esta implementación con $p$ procesos? Usa **la misma base para todas** (el mejor serial: `ikj` con blocking, salvo con $n \le 1000$, donde es `ikj` sin blocking), por lo que es la única métrica que permite comparar implementaciones entre sí.
 - **Relativo, $S_{rel} = T(1)/T(p)$:** ¿qué tan bien escala esta implementación respecto de sí misma? Cada implementación usa **su propia base**, así que sus valores no son comparables entre implementaciones. Sirve para diagnosticar el escalado (Amdahl, Karp-Flatt, sobrecosto), no para decir cuál es mejor.
 
 **Por qué los dos difieren tanto.** Los dos speedups se relacionan por un factor que depende solo de la implementación y del tamaño, la *ventaja de base*:
@@ -1001,13 +1002,13 @@ Ese cociente $T_{ser}/T(1)$ mide cuánto más rápida (o lenta) que el serial es
 
 | Implementación | $T_{ser}/T(1)$, $n=10\,000$ | $S_{rel}(48)$ | $S_{abs}(48)$ | $T_{ser}/T(1)$, $n=1000$ | $S_{rel}(48)$ | $S_{abs}(48)$ |
 |---|--:|--:|--:|--:|--:|--:|
-| `ikj` 1D | 0,43 | 4,25 | 1,84 | 1,27 | 1,65 | 2,09 |
-| `ikj` blocking 1D | 1,02 | 22,94 | 23,44 | 1,01 | 10,12 | 10,23 |
-| `PDGEMM` 2D | 3,47 | 7,31 | 25,36 | 2,54 | 3,86 | 9,80 |
+| `ikj` 1D | 0,43 | 4,25 | 1,84 | 0,97 | 1,65 | 1,60 |
+| `ikj` blocking 1D | 1,02 | 22,94 | 23,44 | 0,77 | 10,12 | 7,83 |
+| `PDGEMM` 2D | 3,47 | 7,31 | 25,36 | 1,94 | 3,86 | 7,50 |
 
 Hay tres consecuencias:
 
-1. **Para `ikj` con blocking los dos speedups casi coinciden**, porque con un proceso ya es esencialmente el código serial (factor $\approx 1$ ).
+1. **Para `ikj` con blocking los dos speedups casi coinciden**, porque con un proceso ya es esencialmente el código serial (factor $\approx 1$ con $n = 10\,000$; con $n = 1000$ el factor es 0,77 porque allí el mejor serial es `ikj` sin blocking).
 2. **`PDGEMM` parece mediocre en relativo (7,3) y es el mejor en absoluto (25,4).** Su kernel local (OpenBLAS) es 3,5 veces más rápido que el serial, de modo que con $p=1$ ya tiene una ventaja que el speedup relativo descarta. Su escalado relativo es modesto porque parte de una base ya muy rápida, pero su tiempo con 48 procesos sigue siendo el menor. Concluir que "escala mal, por lo tanto es peor" sería un error causado por la métrica.
 3. **`ikj` sin blocking muestra un speedup relativo de 4,25 y uno absoluto de 1,84**: su base es peor que el serial (0,43), así que el relativo exagera su ganancia real. Con 48 procesos apenas duplica el rendimiento del mejor serial.
 
@@ -1017,7 +1018,7 @@ Por eso cada resultado de este capítulo se informa con el speedup absoluto cuan
 
 ![Speedup absoluto en función de p](img/speedup_abs_vs_p.png)
 
-*Figura 7.1a. Speedup absoluto* ( $T_{ser}/T(p)$ , *con* $T_{ser}$ *el mejor serial, `ikj` con blocking) en función de* $p$ . *Todas las curvas comparten la misma base, por lo que son directamente comparables entre sí. Con* $p=1$ *el valor de `PDGEMM` ya es 3,5 (n = 10 000), 2,5 (n = 1000), y por eso en la figura 7.1b parece escalar peor*.
+*Figura 7.1a. Speedup absoluto* ( $T_{ser}/T(p)$ , *con* $T_{ser}$ *el mejor serial, el más rápido entre `ikj` e `ikj` con blocking) en función de* $p$ . *Todas las curvas comparten la misma base, por lo que son directamente comparables entre sí. Con* $p=1$ *el valor de `PDGEMM` ya es 3,5 (n = 10 000), 1,9 (n = 1000), y por eso en la figura 7.1b parece escalar peor*.
 
 ![Speedup en función de p](img/speedup_vs_p.png)
 
@@ -1040,21 +1041,21 @@ Por eso cada resultado de este capítulo se informa con el speedup absoluto cuan
 
 | $p$ | `ikj` 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | `ikj` blocking 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | PDGEMM 2D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ |
 |--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| 1 | 0,107 | 1,27 | 1,00 | 1,00 | 0,134 | 1,01 | 1,00 | 1,00 | 0,053 | 2,54 | 1,00 | 1,00 |
-| 2 | 0,067 | 2,03 | 1,60 | 0,80 | 0,071 | 1,92 | 1,89 | 0,95 | 0,052 | 2,62 | 1,03 | 0,52 |
-| 4 | 0,216 | 0,63 | 0,49 | 0,12 | 0,038 | 3,52 | 3,48 | 0,87 | 0,029 | 4,60 | 1,81 | 0,45 |
-| 8 | 0,220 | 0,62 | 0,49 | 0,06 | 0,022 | 6,12 | 6,06 | 0,76 | 0,017 | 8,00 | 3,15 | 0,39 |
-| 16 | 0,123 | 1,10 | 0,86 | 0,05 | 0,017 | 7,87 | 7,78 | 0,49 | 0,013 | 10,41 | 4,10 | 0,26 |
-| 24 | 0,091 | 1,49 | 1,17 | 0,05 | 0,017 | 7,98 | 7,89 | 0,33 | 0,014 | 9,97 | 3,93 | 0,16 |
-| 32 | 0,071 | 1,91 | 1,50 | 0,05 | 0,012 | 11,12 | 11,00 | 0,34 | 0,014 | 9,90 | 3,90 | 0,12 |
-| 48 | 0,065 | 2,09 | 1,65 | 0,03 | 0,013 | 10,23 | 10,12 | 0,21 | 0,014 | 9,80 | 3,86 | 0,08 |
+| 1 | 0,107 | 0,97 | 1,00 | 1,00 | 0,134 | 0,77 | 1,00 | 1,00 | 0,053 | 1,94 | 1,00 | 1,00 |
+| 2 | 0,067 | 1,56 | 1,60 | 0,80 | 0,071 | 1,47 | 1,89 | 0,95 | 0,052 | 2,00 | 1,03 | 0,52 |
+| 4 | 0,216 | 0,48 | 0,49 | 0,12 | 0,038 | 2,69 | 3,48 | 0,87 | 0,029 | 3,52 | 1,81 | 0,45 |
+| 8 | 0,220 | 0,47 | 0,49 | 0,06 | 0,022 | 4,69 | 6,06 | 0,76 | 0,017 | 6,12 | 3,15 | 0,39 |
+| 16 | 0,123 | 0,84 | 0,86 | 0,05 | 0,017 | 6,02 | 7,78 | 0,49 | 0,013 | 7,96 | 4,10 | 0,26 |
+| 24 | 0,091 | 1,14 | 1,17 | 0,05 | 0,017 | 6,10 | 7,89 | 0,33 | 0,014 | 7,63 | 3,93 | 0,16 |
+| 32 | 0,071 | 1,46 | 1,50 | 0,05 | 0,012 | 8,51 | 11,00 | 0,34 | 0,014 | 7,58 | 3,90 | 0,12 |
+| 48 | 0,065 | 1,60 | 1,65 | 0,03 | 0,013 | 7,83 | 10,12 | 0,21 | 0,014 | 7,50 | 3,86 | 0,08 |
 
 Los hechos más notables son los siguientes.
 
 - **La versión 1D con blocking escala bien.** Para $n = 10\,000$ la eficiencia es 0,98 con 2 procesos, 0,85 con 16 y 0,48 con 48, con un speedup relativo de 22,9 (23,4 absoluto) y 325 GFLOPS frente a los 14 de un proceso.
 - **La versión 1D sin blocking casi no escala.** Con $n = 10\,000$ el tiempo no cambia entre $p = 2$ y $p = 8$ (216,4 s a 214,2 s) y llega a un speedup de apenas 4,25 con 48 procesos. Es una consecuencia de lo visto en el capítulo 2: `ikj` es una versión limitada por el ancho de banda de memoria, y varios procesos que leen *B* a la vez saturan ese recurso compartido sin cómputo adicional que lo compense. *(Es una interpretación consistente con los datos; no se midió la ocupación del bus de memoria ni la topología NUMA.)* Un dato elocuente: `ikj` bloqueado con **2 procesos** (72,3 s) es más rápido que `ikj` sin blocking con **48** (78,3 s).
 - **Un resultado anómalo reproducible.** Con $n = 1000$ la versión `ikj` 1D tarda más con 4 procesos (0,216 s) que con 2 (0,067 s), y su speedup queda por debajo de 1 hasta $p = 16$. Las repeticiones son muy estables (desviación relativa menor al 1 %), por lo que no es ruido; con los datos disponibles no se pudo identificar la causa, ya que no se cronometraron las fases por separado.
-- **Medido contra el mejor serial, `PDGEMM` supera a la versión 1D con blocking en casi todos los $p$.** Con $n = 10\,000$ su speedup absoluto es 5,6 con 2 procesos (1,99 el 1D bloqueado) y 25,4 con 48 (23,4); con $n = 1000$ lo supera hasta $p = 24$ y queda por debajo con $p = 32$ y $48$ (9,8 frente a 11,1 y 10,2). El speedup relativo de `PDGEMM` (7,3 con 48 procesos) hacía parecer lo contrario, porque su base con un proceso ya es 3,5 veces más rápida que el serial. Eso no indica una peor implementación sino un mejor kernel local.
+- **Medido contra el mejor serial, `PDGEMM` supera a la versión 1D con blocking en casi todos los $p$.** Con $n = 10\,000$ su speedup absoluto es 5,6 con 2 procesos (1,99 el 1D bloqueado) y 25,4 con 48 (23,4); con $n = 1000$ lo supera hasta $p = 24$ y queda por debajo con $p = 32$ y $48$ (7,6 frente a 8,5 con $p = 32$, y 7,5 frente a 7,8 con $p = 48$). El speedup relativo de `PDGEMM` (7,3 con 48 procesos) hacía parecer lo contrario, porque su base con un proceso ya es 3,5 veces más rápida que el serial. Eso no indica una peor implementación sino un mejor kernel local.
 - **`PDGEMM` es el más rápido en términos absolutos** en la mayoría de los tamaños medianos y grandes: con 48 procesos llega a 476 GFLOPS ( $n = 5000$ ) y a 352 GFLOPS ( $n = 10\,000$ ), aunque sus ganancias relativas son modestas porque parte de una base muy rápida.
 
 ### 7.3 La ley de Amdahl y la fracción no paralelizable
@@ -1077,7 +1078,7 @@ Esta fracción es medible. Si se incluye la generación de *A* y *B* como parte 
 
 | $n$ | $f_{gen}$ (generación / corrida serial completa) | Cota de Amdahl $1/f_{gen}$ | $S$ medido sin generación ( $p=48$ ) | $S$ medido con generación ( $p=48$ ) |
 |--:|--:|--:|--:|--:|
-| 1000 | 0,184 | 5,4 | 10,2 | 3,5 |
+| 1000 | 0,228 | 4,4 | 7,8 | 2,9 |
 | 2000 | 0,097 | 10,3 | 16,2 | 6,3 |
 | 5000 | 0,040 | 25,1 | 24,3 | 12,1 |
 | 10000 | 0,020 | 49,6 | 23,4 | 15,7 |
@@ -1086,9 +1087,9 @@ Esta fracción es medible. Si se incluye la generación de *A* y *B* como parte 
 
 *Figura 7.2. Izquierda: fracción serial experimental de Karp-Flatt de la corrida completa (generación de* $A$ *y* $B$ *más producto) en función de* $p$ (*línea continua* $n=10\,000$ , *punteada* $n=1000$ ). *Derecha: speedup de la versión 1D con blocking* ( $p = 16$ ) *con y sin contar la generación serial*.
 
-Para $n = 1000$, la generación es casi una quinta parte de la corrida serial ( $f_{gen} = 0{,}18$ ) y por lo tanto el speedup de la corrida completa **no puede superar 5,4**, sin importar cuántos procesos se usen; el valor medido con 48 procesos es 3,5, mientras que el speedup del producto aislado era de 10,2. Para $n = 10\,000$ la fracción es solo del 2 % (cota de 49,6) y el efecto es menor, aunque no despreciable: con $p = 16$ el speedup cae de 13,9 a 11,1 al incluir la generación, y con $p = 48$ de 23,4 a 15,7. La generación es $O(n^2)$ y el producto $O(n^3)$, así que $f_{gen}$ decrece como $1/n$.
+Para $n = 1000$, la generación es casi una cuarta parte de la corrida serial ( $f_{gen} = 0{,}23$ ) y por lo tanto el speedup de la corrida completa **no puede superar 4,4**, sin importar cuántos procesos se usen; el valor medido con 48 procesos es 2,9, mientras que el speedup del producto aislado era de 7,8. Para $n = 10\,000$ la fracción es solo del 2 % (cota de 49,6) y el efecto es menor, aunque no despreciable: con $p = 16$ el speedup cae de 13,9 a 11,1 al incluir la generación, y con $p = 48$ de 23,4 a 15,7. La generación es $O(n^2)$ y el producto $O(n^3)$, así que $f_{gen}$ decrece como $1/n$.
 
-Esta tabla corresponde a matrices generadas en RAM. Si en cambio se leen de archivo, la fracción serial sube a entre 0,24 y 0,79 y la cota cae a entre 1,3 y 4,2 (sección 7.4).
+Esta tabla corresponde a matrices generadas en RAM. Si en cambio se leen de archivo, la fracción serial sube a entre 0,24 y 0,79 y la cota cae a entre 1,3 y 4,2 (apartado «Entrada desde archivo», más abajo).
 
 #### La fracción serial experimental (Karp-Flatt)
 
@@ -1102,7 +1103,9 @@ Las otras versiones se comportan de forma distinta. `ikj` sin blocking con $n = 
 
 - **En el i5-7400 ( $p = 4$ ) ocurre lo mismo, atenuado por tener pocos procesos:** con blocking 1D el speedup completo baja de 2,06 a 1,18 con $n = 1000$, de 2,99 a 1,77 con $n = 5000$ y de 3,17 a 2,17 con $n = 10\,000$. La cota (4,5 con $n = 10\,000$ ) todavía no limita con $p = 4$, pero lo haría con más cores.
 
-La fracción serial de Karp-Flatt (sección 7.3) incluye la lectura como parte serial. Con el blocking 1D y $n = 10\,000$ pasa de 0,031 a 0,045 con generación en RAM a entre 0,27 y 0,36 con lectura de archivo (0,27 con $p = 16$ y 0,36 con $p = 48$), cerca de la fracción de la corrida serial que ocupa la lectura (0,26 con $p = 1$). Con $n = 1000$ la lectura ocupa el 85 % de la corrida serial y $e$ crece con $p$ (de 0,24 a 0,65): ahí el tiempo de lectura es tan grande y variable que la métrica pierde precisión.
+#### Entrada desde archivo
+
+La fracción serial de Karp-Flatt incluye la lectura como parte serial. Con el blocking 1D y $n = 10\,000$ pasa de 0,031 a 0,045 con generación en RAM a entre 0,27 y 0,36 con lectura de archivo (0,27 con $p = 16$ y 0,36 con $p = 48$), cerca de la fracción de la corrida serial que ocupa la lectura (0,26 con $p = 1$). Con $n = 1000$ la lectura ocupa el 85 % de la corrida serial y $e$ crece con $p$ (de 0,24 a 0,65): ahí el tiempo de lectura es tan grande y variable que la métrica pierde precisión.
 
 #### Mejora no realizada: lectura paralela en MPI
 
@@ -1112,7 +1115,7 @@ En las versiones MPI la lectura es paralelizable, y es una mejora que no se impl
 - Con texto de ancho variable los procesos no saben dónde empieza cada fila sin un índice. Con un formato binario de ancho fijo (8 bytes por elemento) cada proceso calcula su desplazamiento directamente, y además se evita el costo del análisis del texto.
 - En 1D todos los procesos necesitan *B* completa. Puede leerse repartida (cada proceso una parte) y armarse en todos con `Allgatherv`, en lugar de leerla entera en el rank 0 y difundirla con `Bcast`.
 - En la partición 2D cada proceso leería solo su loseta de *A* y de *B*.
-- No se midió cuánto se ganaría: depende de cuánto del tiempo de lectura es análisis del texto y cuánto ancho de banda de disco (ver la hipótesis de la Tabla 7.3). Si domina el análisis del texto, la lectura escalaría con $p$ hasta que el disco limite.
+- No se midió cuánto se ganaría: depende de cuánto del tiempo de lectura es análisis del texto y cuánto ancho de banda de disco. Si domina el análisis del texto, la lectura escalaría con $p$ hasta que el disco la limite.
 
 #### Resumen
 
@@ -1130,8 +1133,8 @@ El cómputo crece como $O(n^3)$ y la comunicación como $O(n^2)$, así que la re
 
 | $n$ | $2n/(p+1)$ (ops por elemento recibido) | Speedup absoluto $S_{abs}$ | Fracción de la corrida ocupada por la generación serial |
 |--:|--:|--:|--:|
-| 500 | 59 | 6,1 | 70 % |
-| 1000 | 118 | 7,9 | 63 % |
+| 500 | 59 | 4,8 | 70 % |
+| 1000 | 118 | 6,0 | 63 % |
 | 2000 | 235 | 10,5 | 53 % |
 | 5000 | 588 | 12,7 | 35 % |
 | 10000 | 1176 | 13,9 | 22 % |
@@ -1140,7 +1143,7 @@ El cómputo crece como $O(n^3)$ y la comunicación como $O(n^2)$, así que la re
 
 *Figura 7.5. Speedup absoluto en función de* $n$ *para* $p = 16$ *y* $p = 48$ *(línea punteada: speedup ideal* $S = p$ *)*
 
-**Con 16 procesos** el speedup absoluto de la versión 1D con blocking sube de manera sostenida de 6,1 ( $n = 500$ ) a 13,9 ( $n = 10\,000$ ), cerca del ideal de 16. La comparación pedida por la consigna es clara: con $n = 5000$ el speedup (12,7) es más del doble que con $n = 500$ (6,1). La fracción de la corrida ocupada por la generación serial también decrece con $n$ (del 70 % al 22 %), porque generar las matrices es $O(n^2)$ y el producto $O(n^3)$.
+**Con 16 procesos** el speedup absoluto de la versión 1D con blocking sube de manera sostenida de 4,8 ( $n = 500$ ) a 13,9 ( $n = 10\,000$ ), cerca del ideal de 16. La comparación pedida por la consigna es clara: con $n = 5000$ el speedup (12,7) es más del doble que con $n = 500$ (4,8). La fracción de la corrida ocupada por la generación serial también decrece con $n$ (del 70 % al 22 %), porque generar las matrices es $O(n^2)$ y el producto $O(n^3)$.
 
 **Con 48 procesos** el speedup también mejora con $n$ al principio, pero no de manera sostenida: en la versión 1D con blocking llega a 25,3 con $n = 7500$ y baja a 23,4 con $n = 10\,000$, y `PDGEMM` alcanza 34,0 con $n = 5000$ y cae a 25,1 y 25,4 con $n = 7500$ y $n = 10\,000$. La variación entre repeticiones es menor que el 1 % y el serial base se mantiene entre 13,3 y 14,8 GFLOPS en todos los $n$, por lo que la caída no parece ruido ni un artefacto de la base.
 
@@ -1150,7 +1153,7 @@ La expectativa teórica, por lo tanto, se cumple con $p = 16$ y solo en parte co
 
 Los datos confirman el argumento teórico del capítulo 4: **el trabajo de cada proceso disminuye con $p$, pero lo que debe recibir no.** En la versión 1D cada proceso computa $2n^3/p$ operaciones y recibe $n^2 + n^2/p$ elementos, de modo que se dispone de $2n/(p+1)$ operaciones para amortizar cada elemento recibido. Al aumentar $p$ con $n$ fijo ese cociente se reduce, hasta que el costo de comunicar y de competir por la memoria supera la ganancia de repartir el cómputo.
 
-En la Figura 7.6 se observa que la eficiencia desciende al aumentar $p$ en todos los tamaños. La caída es suave con problemas grandes y abrupta con problemas pequeños: para $n = 1000$ la eficiencia de la versión con blocking cae de 0,95 ( $p=2$ ) a 0,49 ( $p=16$ ) y 0,21 ( $p=48$ ), y el speedup se estanca en torno a 10 a partir de $p = 32$ (el tiempo no baja de unos 12 ms, el que ocupan la comunicación y el resto de costos fijos). En $n = 10\,000$, en cambio, la eficiencia permanece sobre 0,85 hasta 16 procesos.
+En la Figura 7.6 se observa que la eficiencia desciende al aumentar $p$ en todos los tamaños. La caída es suave con problemas grandes y abrupta con problemas pequeños: para $n = 1000$ la eficiencia de la versión con blocking cae de 0,95 ( $p=2$ ) a 0,49 ( $p=16$ ) y 0,21 ( $p=48$ ), y el speedup se estanca en torno a 8 a partir de $p = 32$ (el tiempo no baja de unos 12 ms, el que ocupan la comunicación y el resto de costos fijos). En $n = 10\,000$, en cambio, la eficiencia permanece sobre 0,85 hasta 16 procesos.
 
 ![Eficiencia en función de p](img/eficiencia_vs_p.png)
 
@@ -1187,8 +1190,9 @@ Visto en términos de speedup absoluto contra el mejor serial, con 48 procesos y
 - **Un nodo por equipo.** Se midió en dos equipos (48 y 4 cores), pero en ambos los procesos MPI se comunican por memoria compartida, no por una red. El costo de comunicación real de un clúster es mayor, de modo que los resultados son optimistas para la partición 1D.
 - **No se cronometraron las fases por separado** en las versiones 1D (comunicación frente a cómputo). El sobrecosto se infiere como $T(p) - T(1)/p$ y mezcla comunicación, contención de memoria y desequilibrio. Cronometrar cada fase con `MPI_Wtime` es la mejora de método más directa.
 - **Tres entornos.** La comparación serial del capítulo 2 se hizo en 16 cores y 24 GB; el análisis paralelo en 48 cores y 192 GB; la replicación en 4 cores y 12 GB (sección 7.11), que solo cubre $p \le 4$. El speedup absoluto se calcula con una versión serial medida en el mismo equipo paralelo, para que sea consistente.
+- **Variabilidad entre corridas.** La dispersión informada es entre repeticiones de una misma corrida. Entre corridas hechas en sesiones distintas se observaron diferencias de hasta 9–13 % para la misma configuración (por ejemplo, `ikj` con blocking 1D, $n = 10\,000$ y $p = 1$: 141,2 s en la corrida con matrices en RAM y 128,3 s en la corrida con archivos), por lo que diferencias menores a ese orden entre corridas independientes no son concluyentes.
 - **Pocas repeticiones para $n$ grande** (5), por el costo de cada corrida; se usa la mediana y se informa la dispersión, pero los intervalos son amplios.
-- **Tamaños hasta $n = 10\,000$** y precisión doble; frecuencia del procesador y afinidad de procesos no se controlaron explícitamente.
+- **Tamaños hasta $n = 10\,000$** y precisión doble; la frecuencia del procesador no se controló. Los procesos MPI se fijaron a cores con `--bind-to core --map-by core`, pero no se verificó a qué sockets y cachés compartidas quedó asignado cada uno.
 - Las explicaciones basadas en saturación de memoria son hipótesis coherentes con los datos, no resultados medidos.
 - **Entrada por archivo solo en texto y en frío.** La lectura se midió con `fscanf` y caché vacía; no se midió con caché tibia, con formato binario ni con lectura paralela, por lo que no se sabe qué parte del tiempo de lectura es análisis del texto y cuál es disco. En el EPYC la lectura varió hasta 2,7 veces entre corridas con $n = 10\,000$ (44 a 119 s), lo que añade ruido al speedup de la corrida completa.
 
@@ -1203,13 +1207,15 @@ Visto en términos de speedup absoluto contra el mejor serial, con 48 procesos y
 | ¿Qué efecto tiene $n$? | A mayor $n$, mejor relación cómputo/comunicación y mejor eficiencia ( $E$ de 0,37 a 0,85 con $p = 16$ entre $n = 500$ y $n = 10\,000$ ). |
 | ¿1D o 2D? | En un nodo con mucha memoria, la 1D bloqueada iguala a `PDGEMM` en tiempo absoluto para $n \ge 7500$; la ventaja de la 2D es estructural (memoria y comunicación por proceso) y se hace relevante a mayor escala. |
 | ¿Se repiten las conclusiones en otro equipo? | Sí, en lo cualitativo: el kernel serial rinde igual (13,5 frente a 13,9 GFLOPS), `ikj` sin blocking no escala y el blocking 1D mantiene $E \ge 0{,}90$ con $p = 4$ (sección 7.11). |
-| ¿Qué pasa si las matrices se leen de archivo? | La lectura cuesta 11–16 veces más que generarlas y es serial: con $n = 10\,000$ y $p = 48$ ocupa el 89 % de la corrida de blocking 1D, la cota de Amdahl baja de 49,5 a 4,2 y el speedup de la corrida completa de 15,7 a 3,2 (de 16,6 a 2,7 con `PDGEMM`). La lectura puede paralelizarse en MPI; no se implementó (sección 7.4). |
+| ¿Qué pasa si las matrices se leen de archivo? | La lectura cuesta 11–16 veces más que generarlas y es serial: con $n = 10\,000$ y $p = 48$ ocupa el 89 % de la corrida de blocking 1D, la cota de Amdahl baja de 49,5 a 4,2 y el speedup de la corrida completa de 15,7 a 3,2 (de 16,6 a 2,7 con `PDGEMM`). La lectura puede paralelizarse en MPI; no se implementó (sección 7.3). |
 
 ### 7.10 Efecto de un bloque mayor: $b = 160$ frente a $b = 64$
 
 Todo el análisis anterior se hizo con bloques de $64 \times 64$ ( $b = 64$ ). Como el barrido de la sección 2.3 mostró que en este servidor el rendimiento es mayor con bloques de 144 a 192, se repitieron las dos versiones bloqueadas (`ikj` bloqueado serial y `ikj` bloqueado 1D) con **bloques de $160 \times 160$** (`BI = BK = BJ = 160`), con los mismos $n$ y el mismo número de repeticiones, en una corrida independiente de la de $b = 64$. Esta sección compara ambas; el resto del capítulo no se modificó y sigue refiriéndose a $b = 64$. Los datos de la corrida con $b = 160$ están en `resultados/servidor/crudo_mayor_bloque.csv` y la figura se genera con `scripts/comparar_bloques.py`.
 
-Se comparan los $p$ comunes a las dos corridas ( $p \in \{ 1, 2, 4, 8, 16, 32, 48\}$; la corrida con $b = 160$ no incluyó $p = 6, 12, 24$ ). Todos los valores son medianas. $S_{abs}$ es el speedup contra el serial bloqueado **del mismo $b$**, y $S_{rel}$ el de la propia versión paralela con $p = 1$.
+Se comparan los $p$ comunes a las dos corridas ( $p \in \{ 1, 2, 4, 8, 16, 32, 48\}$; la corrida con $b = 160$ no incluyó $p = 6, 12, 24$ ). Todos los valores son medianas. $S_{abs}$ es el speedup contra el serial bloqueado **del mismo $b$**, y $S_{rel}$ el de la propia versión paralela con $p = 1$. Por eso, con $n = 500$ y $n = 1000$ los $S_{abs}$ con $b = 64$ de estas tablas difieren de los de la sección 7.2, donde la base es `ikj` sin blocking (más rápido con esos $n$).
+
+*Advertencia sobre la reproducibilidad.* La corrida con $b = 160$ se hizo en una sola sesión. Un barrido posterior (`resultados/servidor/barrido_bloque_reps10.csv`, 10 repeticiones) dio para el serial bloqueado con $b = 160$ valores menores que los de la Tabla 7.5: 16,2 GFLOPS frente a 19,2 con $n = 2000$, y 15,6 frente a 17,1 con $n = 7500$; con $n = 4000$ los dos coinciden (19,3 frente a 20,1). Con $b = 64$, en cambio, ambas corridas coinciden dentro del 1 %. Por eso las reducciones de tiempo de esta sección (20–27 %) deben leerse como las de esa sesión; en el barrido posterior la ganancia de $b = 160$ sobre $b = 64$ es de entre 13 y 30 %. Esto es coherente con la variabilidad entre sesiones de la sección 7.8 y es una de las razones por las que el informe usa $b = 64$.
 
 ![Comparación entre bloques de 64 y de 160](img/bloque_64_vs_160.png)
 
@@ -1262,7 +1268,7 @@ Lo que muestran los datos:
 - **El escalado propio ( $S_{rel}$ ) no empeora**: es igual o algo mayor con $b = 160$ (con $n = 10\,000$ y $p = 48$, 25,7 frente a 22,9). El bloque mayor no cambia cómo escala la versión paralela con $p$.
 - **Con $p = 1$ la versión MPI ya no iguala al serial.** Con $b = 64$ el cociente serial/MPI( $p=1$ ) vale entre 0,98 y 1,03 (son prácticamente el mismo código). Con $b = 160$ vale entre 0,79 y 0,91: el serial rinde 17–20 GFLOPS y la versión MPI con un proceso, 14,4–16,2. Es decir, el bloque mayor beneficia más al serial que a la versión MPI con un proceso, y esto explica parte de la caída de $S_{abs}$. No se identificó la causa.
 
-En resumen: con un bloque mayor el programa es más rápido en términos absolutos (hasta 433 GFLOPS frente a 338), pero el speedup contra su mejor serial no aumenta, porque la base serial mejora tanto o más. Las conclusiones de la sección 7.9 se mantienen.
+En resumen: con un bloque mayor el programa es más rápido en términos absolutos (hasta 433 GFLOPS frente a 338), pero el speedup contra su mejor serial no aumenta, porque la base serial mejora tanto o más. Las conclusiones de la sección 7.9 se mantienen. Dado que $b = 160$ resultó menos estable entre sesiones que $b = 64$, las conclusiones del capítulo se mantienen con $b = 64$ y esta sección debe tomarse como una exploración.
 
 
 ### 7.11 Replicación en un segundo equipo (i5-7400)
@@ -1339,7 +1345,7 @@ Las propuestas se agrupan según la evidencia que las respalda: primero las que 
 
 #### Generación y lectura distribuidas de las matrices
 
-**Problema detectado.** En las versiones 1D el rank 0 genera (o lee) *A* y *B* completas, las reparte y recolecta *C*. Esa entrada y salida es una parte serial que no se beneficia de agregar procesos. Con $n = 1000$ la generación equivale al 18 % de una corrida serial y limita el speedup de la ejecución completa a 5,4 por la ley de Amdahl, aunque el producto aislado alcance 10 (sección 7.3). Si las matrices se leen de un archivo de texto, el problema crece: la lectura cuesta 11 a 16 veces más que generar y la cota de Amdahl de la corrida completa baja a 4,2 con $n = 10\,000$ (sección 7.4).
+**Problema detectado.** En las versiones 1D el rank 0 genera (o lee) *A* y *B* completas, las reparte y recolecta *C*. Esa entrada y salida es una parte serial que no se beneficia de agregar procesos. Con $n = 1000$ la generación equivale al 23 % de una corrida serial y limita el speedup de la ejecución completa a 4,4 por la ley de Amdahl, aunque el producto aislado alcance casi 8 (sección 7.3). Si las matrices se leen de un archivo de texto, el problema crece: la lectura cuesta 11 a 16 veces más que generar y la cota de Amdahl de la corrida completa baja a 4,2 con $n = 10\,000$ (sección 7.3).
 
 **Propuesta general.** Que ningún proceso, en particular el rank 0, toque más datos de los que necesita. Cada proceso obtiene solo las porciones de *A* y *B* que usa y, si es posible, el resultado se verifica sin recolectar *C*. Cómo se concreta depende de cuál sea el origen de los datos.
 
@@ -1350,7 +1356,7 @@ Las propuestas se agrupan según la evidencia que las respalda: primero las que 
 - **<i>A</i> y <i>B</i> en la partición 2D:** cada proceso genera solo su loseta de cada matriz, de modo que todo el trabajo de generación escala como $1/p$.
 - **Reproducibilidad:** se necesita un generador de números pseudoaleatorios *sin estado*, donde el valor de cada elemento sea una función de $(i, j, \text{semilla})$. Así el resultado es idéntico para cualquier $p$ y cualquier partición, y se puede validar sin mover datos.
 
-**Caso 2: matrices leídas de archivo (sección 7.4).**
+**Caso 2: matrices leídas de archivo (sección 7.3).**
 
 - **El formato de texto es el obstáculo.** Con un número por línea y ancho variable (`%.10g`), un proceso no puede saltar a la fila $i$ sin recorrer lo anterior, por lo que la lectura de cada uno no se puede repartir. La opción práctica es convertir una vez las matrices a **formato binario** de ancho fijo (8 bytes por elemento); entonces el elemento $(i, j)$ está en el desplazamiento $8(in + j)$.
 - **Lectura paralela con MPI-IO.** Con `MPI_File_read_at_all`, cada proceso lee solo sus filas de *A* (1D) o su loseta (2D, con una vista de archivo definida por `MPI_Type_create_subarray`).

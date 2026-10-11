@@ -1,13 +1,19 @@
 # Multiplicación de matrices en paralelo con MPI
 
-**De la versión serial `ijk` a SUMMA y ScaLAPACK: un estudio de optimización de memoria, partición de datos y escalabilidad**
+**De la versión serial `ijk` a SUMMA y ScaLAPACK**
 
-*Proyecto 8 — Métodos de Computación de Alto Rendimiento (HPC)*
+*Optimización de memoria, partición de datos y escalabilidad*
 
-**Autores:** Rodriguez del Busto, Sofía · Rojas, Gabriel · Salinas, Pedro Ignacio
 ---
 
-## Resumen
+**Proyecto 8 — Métodos de Computación de Alto Rendimiento (HPC)**
+
+**Autores:** Sofía Rodriguez del Busto · Gabriel Rojas · Pedro Ignacio Salinas
+
+---
+
+
+## Introducción
 
 La multiplicación de matrices densas, $C = A \times B$, es una de las operaciones más estudiadas de la computación científica: tiene una definición elemental, un costo cúbico y una estructura de datos tan regular que casi cualquier estrategia de paralelización puede aplicarse y compararse con claridad. Este trabajo recorre el problema en tres etapas.
 
@@ -1025,33 +1031,7 @@ Por eso cada resultado de este capítulo se informa con el speedup absoluto cuan
 
 *Figura 7.1b. Speedup relativo* ( $T(1)/T(p)$ *del propio algoritmo; complementario: mide escalado, no permite comparar implementaciones) en función de* $p$ *para tres tamaños. La línea punteada es el speedup ideal* $S = p$
 
-**Tabla 7.1.** Resultados para $n = 10\,000$ (la matriz más grande):
-
-| $p$ | `ikj` 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | `ikj` blocking 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | PDGEMM 2D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ |
-|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| 1 | 333,2 | 0,43 | 1,00 | 1,00 | 141,2 | 1,02 | 1,00 | 1,00 | 41,58 | 3,47 | 1,00 | 1,00 |
-| 2 | 216,4 | 0,67 | 1,54 | 0,77 | 72,34 | 1,99 | 1,95 | 0,98 | 25,84 | 5,59 | 1,61 | 0,80 |
-| 4 | 214,9 | 0,67 | 1,55 | 0,39 | 36,99 | 3,90 | 3,82 | 0,95 | 15,31 | 9,43 | 2,72 | 0,68 |
-| 8 | 214,2 | 0,67 | 1,56 | 0,19 | 19,24 | 7,50 | 7,34 | 0,92 | 14,79 | 9,76 | 2,81 | 0,35 |
-| 16 | 115,2 | 1,25 | 2,89 | 0,18 | 10,35 | 13,95 | 13,65 | 0,85 | 8,767 | 16,46 | 4,74 | 0,30 |
-| 24 | 81,82 | 1,76 | 4,07 | 0,17 | 8,174 | 17,65 | 17,28 | 0,72 | 7,127 | 20,25 | 5,83 | 0,24 |
-| 32 | 81,76 | 1,76 | 4,08 | 0,13 | 6,599 | 21,87 | 21,40 | 0,67 | 6,182 | 23,34 | 6,73 | 0,21 |
-| 48 | 78,32 | 1,84 | 4,25 | 0,09 | 6,157 | 23,44 | 22,94 | 0,48 | 5,689 | 25,36 | 7,31 | 0,15 |
-
-**Tabla 7.2.** Resultados para $n = 1000$:
-
-| $p$ | `ikj` 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | `ikj` blocking 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | PDGEMM 2D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ |
-|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| 1 | 0,107 | 0,97 | 1,00 | 1,00 | 0,134 | 0,77 | 1,00 | 1,00 | 0,053 | 1,94 | 1,00 | 1,00 |
-| 2 | 0,067 | 1,56 | 1,60 | 0,80 | 0,071 | 1,47 | 1,89 | 0,95 | 0,052 | 2,00 | 1,03 | 0,52 |
-| 4 | 0,216 | 0,48 | 0,49 | 0,12 | 0,038 | 2,69 | 3,48 | 0,87 | 0,029 | 3,52 | 1,81 | 0,45 |
-| 8 | 0,220 | 0,47 | 0,49 | 0,06 | 0,022 | 4,69 | 6,06 | 0,76 | 0,017 | 6,12 | 3,15 | 0,39 |
-| 16 | 0,123 | 0,84 | 0,86 | 0,05 | 0,017 | 6,02 | 7,78 | 0,49 | 0,013 | 7,96 | 4,10 | 0,26 |
-| 24 | 0,091 | 1,14 | 1,17 | 0,05 | 0,017 | 6,10 | 7,89 | 0,33 | 0,014 | 7,63 | 3,93 | 0,16 |
-| 32 | 0,071 | 1,46 | 1,50 | 0,05 | 0,012 | 8,51 | 11,00 | 0,34 | 0,014 | 7,58 | 3,90 | 0,12 |
-| 48 | 0,065 | 1,60 | 1,65 | 0,03 | 0,013 | 7,83 | 10,12 | 0,21 | 0,014 | 7,50 | 3,86 | 0,08 |
-
-Los hechos más notables son los siguientes.
+Los resultados detallados de tiempos, speedup y eficiencia para $n=10\,000$ y $n=1000$ se encuentran tabulados en las Tablas [A.1](#tabla-a1) y [A.2](#tabla-a2) del Apéndice, respectivamente. Los hechos más notables que se desprenden de ellos son los siguientes:
 
 - **La versión 1D con blocking escala bien.** Para $n = 10\,000$ la eficiencia es 0,98 con 2 procesos, 0,85 con 16 y 0,48 con 48, con un speedup relativo de 22,9 (23,4 absoluto) y 325 GFLOPS frente a los 14 de un proceso.
 - **La versión 1D sin blocking casi no escala.** Con $n = 10\,000$ el tiempo no cambia entre $p = 2$ y $p = 8$ (216,4 s a 214,2 s) y llega a un speedup de apenas 4,25 con 48 procesos. Es una consecuencia de lo visto en el capítulo 2: `ikj` es una versión limitada por el ancho de banda de memoria, y varios procesos que leen *B* a la vez saturan ese recurso compartido sin cómputo adicional que lo compense. *(Es una interpretación consistente con los datos; no se midió la ocupación del bus de memoria ni la topología NUMA.)* Un dato elocuente: `ikj` bloqueado con **2 procesos** (72,3 s) es más rápido que `ikj` sin blocking con **48** (78,3 s).
@@ -1222,47 +1202,7 @@ Se comparan los $p$ comunes a las dos corridas ( $p \in \{ 1, 2, 4, 8, 16, 32, 4
 
 *Figura 7.8. Rendimiento del serial bloqueado (izquierda), rendimiento de la versión 1D bloqueada con* $p = 48$ (*centro) y su speedup absoluto contra el serial del mismo* $b$ (*derecha), para* $b = 64$ *y* $b = 160$
 
-**Tabla 7.5.** Versión serial bloqueada:
-
-| $n$ | $T$ con 64 (s) | $T$ con 160 (s) | GFLOPS (64) | GFLOPS (160) | Reducción del tiempo |
-|--:|--:|--:|--:|--:|--:|
-| 500 | 0,0176 | 0,0141 | 14,2 | 17,7 | 20 % |
-| 1000 | 0,135 | 0,108 | 14,8 | 18,5 | 20 % |
-| 1500 | 0,488 | 0,390 | 13,8 | 17,3 | 20 % |
-| 2000 | 1,104 | 0,835 | 14,5 | 19,2 | 24 % |
-| 3000 | 3,798 | 2,931 | 14,2 | 18,4 | 23 % |
-| 4000 | 8,744 | 6,359 | 14,6 | 20,1 | 27 % |
-| 5000 | 17,86 | 13,60 | 14,0 | 18,4 | 24 % |
-| 7500 | 63,26 | 49,22 | 13,3 | 17,1 | 22 % |
-| 10000 | 144,30 | 104,77 | 13,9 | 19,1 | 27 % |
-
-**Tabla 7.6.** Versión 1D bloqueada con $p = 48$:
-
-| $n$ | $T$ con 64 (s) | $T$ con 160 (s) | GFLOPS (64) | GFLOPS (160) | $S_{abs}$ (64) | $S_{abs}$ (160) | Reducción del tiempo |
-|--:|--:|--:|--:|--:|--:|--:|--:|
-| 500 | 0,0018 | 0,0018 | 138 | 138 | 9,7 | 7,8 | 0 % |
-| 1000 | 0,0132 | 0,0127 | 151 | 158 | 10,2 | 8,5 | 4 % |
-| 1500 | 0,0352 | 0,0350 | 192 | 193 | 13,8 | 11,2 | 1 % |
-| 2000 | 0,0681 | 0,0657 | 235 | 244 | 16,2 | 12,7 | 4 % |
-| 3000 | 0,186 | 0,186 | 290 | 290 | 20,4 | 15,7 | 0 % |
-| 4000 | 0,403 | 0,345 | 318 | 371 | 21,7 | 18,4 | 14 % |
-| 5000 | 0,735 | 0,683 | 340 | 366 | 24,3 | 19,9 | 7 % |
-| 7500 | 2,496 | 1,950 | 338 | 433 | 25,3 | 25,2 | 22 % |
-| 10000 | 6,157 | 5,143 | 325 | 389 | 23,4 | 20,4 | 16 % |
-
-**Tabla 7.7.** Versión 1D bloqueada con $n = 10\,000$ en función de $p$:
-
-| $p$ | $T$ con 64 (s) | $T$ con 160 (s) | $S_{abs}$ (64) | $S_{abs}$ (160) | $S_{rel}$ (64) | $S_{rel}$ (160) |
-|--:|--:|--:|--:|--:|--:|--:|
-| 1 | 141,24 | 132,03 | 1,02 | 0,79 | 1,00 | 1,00 |
-| 2 | 72,34 | 66,28 | 1,99 | 1,58 | 1,95 | 1,99 |
-| 4 | 36,99 | 33,53 | 3,90 | 3,12 | 3,82 | 3,94 |
-| 8 | 19,24 | 17,07 | 7,50 | 6,14 | 7,34 | 7,73 |
-| 16 | 10,35 | 9,236 | 13,95 | 11,34 | 13,65 | 14,29 |
-| 32 | 6,599 | 5,753 | 21,87 | 18,21 | 21,40 | 22,95 |
-| 48 | 6,157 | 5,143 | 23,44 | 20,37 | 22,94 | 25,67 |
-
-Lo que muestran los datos:
+Las métricas crudas de esta comparación, tanto para la versión serial como para la versión 1D bloqueada, se pueden consultar en las Tablas [A.3](#tabla-a3), [A.4] y [A.5] del Apéndice. Lo que muestran los datos es lo siguiente:
 
 - **El tiempo absoluto mejora en todas las configuraciones comparadas.** El serial reduce su tiempo entre un 20 % y un 27 % (de 13–15 a 17–20 GFLOPS). La versión 1D con $p = 48$ lo reduce menos y de forma desigual: nada con $n = 500$ y $n = 3000$, entre un 1 % y un 7 % con $n = 1000$, $1500$, $2000$ y $5000$, y un 14 %, 22 % y 16 % con $n = 4000$, $7500$ y $10\,000$. El máximo pasa de 338 a 433 GFLOPS ( $n = 7500$, $p = 48$ ).
 - **El speedup absoluto $S_{abs}$ baja** en todos los tamaños salvo $n = 7500$, donde queda igual (25,3 frente a 25,2). No es un empeoramiento del paralelo: el denominador (el serial) mejoró más que la versión paralela. Con $n = 10\,000$ y $p = 48$, el tiempo paralelo baja de 6,16 s a 5,14 s, pero $S_{abs}$ pasa de 23,4 a 20,4. Es la medida más exigente, porque la base serial es mejor.
@@ -1276,28 +1216,11 @@ En resumen: con un bloque mayor el programa es más rápido en términos absolut
 
 Para comprobar que las conclusiones no dependen del equipo de 48 cores, el barrido se repitió en un servidor distinto: un Intel Core i5-7400 con 4 cores, 12 GB de RAM y 6 MB de L3 (ver «Entornos de medición»). Se usaron los mismos $n$ (500 a 10 000), las mismas tres versiones paralelas, $b = 64$ y las mismas repeticiones, pero solo $p \in \{ 1, 2, 4\}$, que es lo que permite el equipo. Los datos están en `resultados/server_i5_7400_en_ram/` y la figura se genera con `scripts/comparar_equipos.py`. La corrida terminó sin fallos.
 
-**Tabla 7.8.** Resultados en el i5-7400 para $n = 10\,000$ ( $S$ y $E$ relativos al propio $p = 1$ ):
-
-| $p$ | `ikj` 1D: $T$ (s) | $S$ | $E$ | `ikj` blocking 1D: $T$ (s) | $S$ | $E$ | PDGEMM 2D: $T$ (s) | $S$ | $E$ |
-|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| 1 | 349,5 | 1,00 | 1,00 | 158,8 | 1,00 | 1,00 | 41,50 | 1,00 | 1,00 |
-| 2 | 276,4 | 1,26 | 0,63 | 82,55 | 1,92 | 0,96 | 31,13 | 1,33 | 0,66 |
-| 4 | 252,3 | 1,38 | 0,34 | 43,98 | 3,61 | 0,90 | 27,16 | 1,52 | 0,38 |
-
 ![Comparación entre el i5-7400 y el EPYC](img/equipos_i5_vs_epyc.png)
 
 *Figura 7.9. Rendimiento (izquierda) y eficiencia (derecha) para* $n = 10\,000$ *y* $p \le 4$ , *en el i5-7400 (línea continua) y en el EPYC (línea de trazos*).
 
-**Tabla 7.9.** Comparación de los dos equipos con $n = 10\,000$:
-
-| Versión | $p$ | GFLOPS i5-7400 | GFLOPS EPYC | $E$ i5-7400 | $E$ EPYC |
-|---|--:|--:|--:|--:|--:|
-| serial blocking | 1 | 13,5 | 13,9 | — | — |
-| `ikj` 1D | 4 | 7,9 | 9,3 | 0,34 | 0,39 |
-| `ikj` blocking 1D | 4 | 45,5 | 54,1 | 0,90 | 0,95 |
-| PDGEMM 2D | 4 | 73,6 | 130,7 | 0,38 | 0,68 |
-
-Lo que muestran los datos:
+Los tiempos de ejecución y las métricas de eficiencia medidas en el equipo i5-7400, así como su contraste directo con el servidor EPYC, se detallan en las Tablas [A.6](#tabla-a6) y [A.7](#tabla-a7) del Apéndice. Lo que muestran los datos de esta replicación es:
 
 - **El kernel serial rinde casi igual en los dos equipos.** El `ikj` bloqueado con un proceso hace 13,5 GFLOPS en el i5 y 13,9 en el EPYC; el `ikj` sin blocking, 5,8 y 6,2. Con procesadores y cachés distintos, esto es compatible con la idea del capítulo 2: el rendimiento de estas versiones lo fija el patrón de acceso a memoria más que el procesador. *(Interpretación; no se midieron contadores de hardware.)*
 - **`ikj` sin blocking vuelve a no escalar**: con $n = 10\,000$ el speedup es 1,26 con $p = 2$ y 1,38 con $p = 4$ (1,53 y 1,55 en el EPYC).
@@ -1320,14 +1243,8 @@ print('rank',os.environ['OMPI_COMM_WORLD_RANK'],':',resource.getrusage(resource.
 
 (Para la 2D se reemplaza el binario por `ref_pdgemm_5000`.)
 
-**Tabla 7.10.** Pico de RSS por proceso, $n = 5000$, $p = 8$:
 
-| | Raíz (rank 0) | Resto de procesos | Suma de los 8 procesos |
-|---|--:|--:|--:|
-| 1D (`ikj`) | 676 MB | 276–279 MB | 2,62 GB |
-| 2D (`PDGEMM`) | 791 MB | 155–164 MB | 1,90 GB |
-
-Lo que muestran los datos:
+Las mediciones del pico de memoria residente (RSS) para el rank 0 y el resto de los procesos se encuentran en la [Tabla A.8](#tabla-a8) del Apéndice. Lo que muestran los datos es:
 
 - **En la 1D**, cada proceso distinto de la raíz mantiene una copia completa de *B* más sus porciones de *A* y *C*, es decir $n^2 + 2n^2/p$ elementos (250 MB); el resto hasta los 276–279 MB es el entorno de MPI (unos 26–29 MB).
 - **En la 2D**, las tres losetas suman $3n^2/p$ elementos (75 MB), pero el consumo medido es de unos 160 MB. La diferencia corresponde al entorno de MPI y a los buffers internos de `pdgemr2d_` y `pdgemm_` (paneles de *A* y *B* y espacio de trabajo), que el modelo teórico del capítulo 5 no incluye. Aun así, los procesos de la 2D usan algo más de la mitad que los de la 1D, y la suma de memoria del nodo baja cerca de un 27 %.
@@ -1342,7 +1259,7 @@ Es una única medición (un valor de $n$, un valor de $p$ y una repetición), po
 
 Las propuestas se agrupan según la evidencia que las respalda: primero las que responden a una limitación o a una cifra medida en el capítulo 7; después las técnicas conocidas que **conviene evaluar**, pero cuya ganancia en este problema no se midió y no está garantizada; y, por último, las perspectivas de escala (clústeres, GPU y bibliotecas) que sitúan el trabajo en el estado del arte sin ser mejoras del código actual.
 
-### 8.1 Mejoras derivadas de los resultados
+### 8.1 Mejoras recomendadas para la implementación actual
 
 #### Generación y lectura distribuidas de las matrices
 
@@ -1488,3 +1405,108 @@ Es la infraestructura típica en los clústeres corporativos que entrenan modelo
 - MPI Forum. *MPI: A Message-Passing Interface Standard.* <https://www.mpi-forum.org/>
 - Open MPI, páginas de manual de funciones MPI: <https://docs.open-mpi.org/en/main/man-openmpi/man3/index.html> (en particular `MPI_Bcast` y `MPI_Dims_create`).
 - Gropp, W., Lusk, E., y Skjellum, A. *Using MPI: Portable Parallel Programming with the Message-Passing Interface.* MIT Press.
+
+---
+
+## Apéndice: Tablas de resultados experimentales
+
+En esta sección se recopilan los datos crudos y las métricas detalladas de las diferentes corridas experimentales analizadas en el informe.
+
+### A.1 Resultados generales del análisis de escalabilidad
+
+**Tabla A.1.** Resultados para $n = 10\,000$ (la matriz más grande):
+<a id="tabla-a1"></a>
+| $p$ | `ikj` 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | `ikj` blocking 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | PDGEMM 2D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ |
+|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| 1 | 333,2 | 0,43 | 1,00 | 1,00 | 141,2 | 1,02 | 1,00 | 1,00 | 41,58 | 3,47 | 1,00 | 1,00 |
+| 2 | 216,4 | 0,67 | 1,54 | 0,77 | 72,34 | 1,99 | 1,95 | 0,98 | 25,84 | 5,59 | 1,61 | 0,80 |
+| 4 | 214,9 | 0,67 | 1,55 | 0,39 | 36,99 | 3,90 | 3,82 | 0,95 | 15,31 | 9,43 | 2,72 | 0,68 |
+| 8 | 214,2 | 0,67 | 1,56 | 0,19 | 19,24 | 7,50 | 7,34 | 0,92 | 14,79 | 9,76 | 2,81 | 0,35 |
+| 16 | 115,2 | 1,25 | 2,89 | 0,18 | 10,35 | 13,95 | 13,65 | 0,85 | 8,767 | 16,46 | 4,74 | 0,30 |
+| 24 | 81,82 | 1,76 | 4,07 | 0,17 | 8,174 | 17,65 | 17,28 | 0,72 | 7,127 | 20,25 | 5,83 | 0,24 |
+| 32 | 81,76 | 1,76 | 4,08 | 0,13 | 6,599 | 21,87 | 21,40 | 0,67 | 6,182 | 23,34 | 6,73 | 0,21 |
+| 48 | 78,32 | 1,84 | 4,25 | 0,09 | 6,157 | 23,44 | 22,94 | 0,48 | 5,689 | 25,36 | 7,31 | 0,15 |
+
+**Tabla A.2.** Resultados para $n = 1000$:
+<a id="tabla-a2"></a>
+| $p$ | `ikj` 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | `ikj` blocking 1D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ | PDGEMM 2D: $T$ (s) | $S_{abs}$ | $S_{rel}$ | $E_{rel}$ |
+|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| 1 | 0,107 | 0,97 | 1,00 | 1,00 | 0,134 | 0,77 | 1,00 | 1,00 | 0,053 | 1,94 | 1,00 | 1,00 |
+| 2 | 0,067 | 1,56 | 1,60 | 0,80 | 0,071 | 1,47 | 1,89 | 0,95 | 0,052 | 2,00 | 1,03 | 0,52 |
+| 4 | 0,216 | 0,48 | 0,49 | 0,12 | 0,038 | 2,69 | 3,48 | 0,87 | 0,029 | 3,52 | 1,81 | 0,45 |
+| 8 | 0,220 | 0,47 | 0,49 | 0,06 | 0,022 | 4,69 | 6,06 | 0,76 | 0,017 | 6,12 | 3,15 | 0,39 |
+| 16 | 0,123 | 0,84 | 0,86 | 0,05 | 0,017 | 6,02 | 7,78 | 0,49 | 0,013 | 7,96 | 4,10 | 0,26 |
+| 24 | 0,091 | 1,14 | 1,17 | 0,05 | 0,017 | 6,10 | 7,89 | 0,33 | 0,014 | 7,63 | 3,93 | 0,16 |
+| 32 | 0,071 | 1,46 | 1,50 | 0,05 | 0,012 | 8,51 | 11,00 | 0,34 | 0,014 | 7,58 | 3,90 | 0,12 |
+| 48 | 0,065 | 1,60 | 1,65 | 0,03 | 0,013 | 7,83 | 10,12 | 0,21 | 0,014 | 7,50 | 3,86 | 0,08 |
+
+### A.2 Efecto de un bloque mayor ($b = 160$ frente a $b = 64$)
+
+**Tabla A.3.** Rendimiento de la versión serial bloqueada:
+<a id="tabla-a3"></a>
+| $n$ | $T$ con 64 (s) | $T$ con 160 (s) | GFLOPS (64) | GFLOPS (160) | Reducción del tiempo |
+|--:|--:|--:|--:|--:|--:|
+| 500 | 0,0176 | 0,0141 | 14,2 | 17,7 | 20 % |
+| 1000 | 0,135 | 0,108 | 14,8 | 18,5 | 20 % |
+| 1500 | 0,488 | 0,390 | 13,8 | 17,3 | 20 % |
+| 2000 | 1,104 | 0,835 | 14,5 | 19,2 | 24 % |
+| 3000 | 3,798 | 2,931 | 14,2 | 18,4 | 23 % |
+| 4000 | 8,744 | 6,359 | 14,6 | 20,1 | 27 % |
+| 5000 | 17,86 | 13,60 | 14,0 | 18,4 | 24 % |
+| 7500 | 63,26 | 49,22 | 13,3 | 17,1 | 22 % |
+| 10000 | 144,30 | 104,77 | 13,9 | 19,1 | 27 % |
+
+**Tabla A.4.** Versión 1D bloqueada con $p = 48$:
+<a id="tabla-a4"></a>
+| $n$ | $T$ con 64 (s) | $T$ con 160 (s) | GFLOPS (64) | GFLOPS (160) | $S_{abs}$ (64) | $S_{abs}$ (160) | Reducción del tiempo |
+|--:|--:|--:|--:|--:|--:|--:|--:|
+| 500 | 0,0018 | 0,0018 | 138 | 138 | 9,7 | 7,8 | 0 % |
+| 1000 | 0,0132 | 0,0127 | 151 | 158 | 10,2 | 8,5 | 4 % |
+| 1500 | 0,0352 | 0,0350 | 192 | 193 | 13,8 | 11,2 | 1 % |
+| 2000 | 0,0681 | 0,0657 | 235 | 244 | 16,2 | 12,7 | 4 % |
+| 3000 | 0,186 | 0,186 | 290 | 290 | 20,4 | 15,7 | 0 % |
+| 4000 | 0,403 | 0,345 | 318 | 371 | 21,7 | 18,4 | 14 % |
+| 5000 | 0,735 | 0,683 | 340 | 366 | 24,3 | 19,9 | 7 % |
+| 7500 | 2,496 | 1,950 | 338 | 433 | 25,3 | 25,2 | 22 % |
+| 10000 | 6,157 | 5,143 | 325 | 389 | 23,4 | 20,4 | 16 % |
+
+**Tabla A.5.** Versión 1D bloqueada con $n = 10\,000$ en función de $p$:
+<a id="tabla-a5"></a>
+| $p$ | $T$ con 64 (s) | $T$ con 160 (s) | $S_{abs}$ (64) | $S_{abs}$ (160) | $S_{rel}$ (64) | $S_{rel}$ (160) |
+|--:|--:|--:|--:|--:|--:|--:|
+| 1 | 141,24 | 132,03 | 1,02 | 0,79 | 1,00 | 1,00 |
+| 2 | 72,34 | 66,28 | 1,99 | 1,58 | 1,95 | 1,99 |
+| 4 | 36,99 | 33,53 | 3,90 | 3,12 | 3,82 | 3,94 |
+| 8 | 19,24 | 17,07 | 7,50 | 6,14 | 7,34 | 7,73 |
+| 16 | 10,35 | 9,236 | 13,95 | 11,34 | 13,65 | 14,29 |
+| 32 | 6,599 | 5,753 | 21,87 | 18,21 | 21,40 | 22,95 |
+| 48 | 6,157 | 5,143 | 23,44 | 20,37 | 22,94 | 25,67 |
+
+### A.3 Replicación en un segundo equipo (Intel i5-7400)
+
+**Tabla A.6.** Resultados en el i5-7400 para $n = 10\,000$ (Speedup y Eficiencia relativos al propio $p = 1$):
+<a id="tabla-a6"></a>
+| $p$ | `ikj` 1D: $T$ (s) | $S$ | $E$ | `ikj` blocking 1D: $T$ (s) | $S$ | $E$ | PDGEMM 2D: $T$ (s) | $S$ | $E$ |
+|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| 1 | 349,5 | 1,00 | 1,00 | 158,8 | 1,00 | 1,00 | 41,50 | 1,00 | 1,00 |
+| 2 | 276,4 | 1,26 | 0,63 | 82,55 | 1,92 | 0,96 | 31,13 | 1,33 | 0,66 |
+| 4 | 252,3 | 1,38 | 0,34 | 43,98 | 3,61 | 0,90 | 27,16 | 1,52 | 0,38 |
+
+
+**Tabla A.7.** Comparación de los dos equipos con $n = 10\,000$:
+<a id="tabla-a7"></a>
+| Versión | $p$ | GFLOPS i5-7400 | GFLOPS EPYC | $E$ i5-7400 | $E$ EPYC |
+|---|--:|--:|--:|--:|--:|
+| serial blocking | 1 | 13,5 | 13,9 | — | — |
+| `ikj` 1D | 4 | 7,9 | 9,3 | 0,34 | 0,39 |
+| `ikj` blocking 1D | 4 | 45,5 | 54,1 | 0,90 | 0,95 |
+| PDGEMM 2D | 4 | 73,6 | 130,7 | 0,38 | 0,68 |
+
+### A.4 Mediciones de Memoria por proceso
+
+**Tabla A.8.** Pico de memoria residente (RSS) por proceso para $n = 5000$, $p = 8$:
+<a id="tabla-a8"></a>
+| | Raíz (rank 0) | Resto de procesos | Suma de los 8 procesos |
+|---|--:|--:|--:|
+| 1D (`ikj`) | 676 MB | 276–279 MB | 2,62 GB |
+| 2D (`PDGEMM`) | 791 MB | 155–164 MB | 1,90 GB |

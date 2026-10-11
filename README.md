@@ -4,6 +4,7 @@
 
 *Proyecto 8 — Métodos de Computación de Alto Rendimiento (HPC)*
 
+**Autores:** Rodriguez del Busto, Sofía · Rojas, Gabriel · Salinas, Pedro Ignacio
 ---
 
 ## Resumen

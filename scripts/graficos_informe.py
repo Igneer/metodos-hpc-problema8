@@ -52,8 +52,8 @@ fig,ax=plt.subplots(1,2,figsize=(10,3.8))
 for alg,(c,mk,l) in EST.items():
     for n,ls in [(1000,":"),(10000,"-")]:
         d=m[(m.algoritmo==alg)&(m.n==n)&(m.procesos>1)].sort_values("procesos")
-        ax[0].plot(d.procesos,d.fraccion_serial_karp_flatt,marker=mk,color=c,ls=ls,label=f"{l}, n={n}" if alg!="x" else "")
-ax[0].set_xlabel("procesos p");ax[0].set_ylabel("fracción serial experimental e");ax[0].set_title("Karp-Flatt");ax[0].legend(fontsize=6.5)
+        ax[0].plot(d.procesos,d.fraccion_serial_karp_flatt_total,marker=mk,color=c,ls=ls,label=f"{l}, n={n}")
+ax[0].set_xlabel("procesos p");ax[0].set_ylabel("fracción serial experimental e");ax[0].set_title("Karp-Flatt (con la generación de A y B)");ax[0].legend(fontsize=6.5)
 d=m[(m.algoritmo=="mpi_ikj_bloqueado")&(m.procesos==16)].sort_values("n")
 ax[1].plot(d.n,d.speedup_mejor_serial,marker="s",color="#eb6834",label="solo producto + comunicación")
 ax[1].plot(d.n,d.speedup_con_generacion_mejor_serial,marker="s",color="#a33",ls="--",label="incluyendo generación serial de A y B")

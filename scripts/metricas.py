@@ -51,6 +51,12 @@ def calcular(d):
             r["eficiencia_p1"] = (s / r.procesos).where(mpi)
     S, p = r.speedup_p1, r.procesos
     r["fraccion_serial_karp_flatt"] = ((1 / S - 1 / p) / (1 - 1 / p)).where(mpi & (p > 1))
+    # Karp-Flatt de la corrida completa: la generacion/lectura de A y B se suma al tiempo
+    # (serial, la hace solo el rank 0), tanto en la base p = 1 como en p.
+    gen = r.set_index(["algoritmo", "n", "procesos"]).generacion_s
+    gen1 = pd.Series([gen.get((a, n, 1), np.nan) for a, n in zip(r.algoritmo, r.n)], index=r.index)
+    S_total = (gen1 + r.p1_s) / (r.generacion_s + r.mediana_s)
+    r["fraccion_serial_karp_flatt_total"] = ((1 / S_total - 1 / p) / (1 - 1 / p)).where(mpi & (p > 1))
     r["sobrecosto_paralelo_s"] = (r.mediana_s - r.p1_s / p).where(mpi & (p > 1))
     r["speedup_con_generacion_mejor_serial"] = ((r.generacion_s + r.serial_mejor_s) / (r.generacion_s + r.mediana_s)).where(mpi)
     r["tiempo_relativo_pdgemm"] = r.mediana_s / r.t_ref_s

@@ -315,7 +315,7 @@ C_{00} = \begin{pmatrix}
 \end{pmatrix}
 $$
 
-El resultado, $C_{00}$, coincide con la esquina superior izquierda de *C* calculada en el capítulo 1. Repetido para los cuatro bloques de *C* son $(n/b)^3 = 8$ productos de bloques, cada uno trabajando únicamente sobre $3 \times 4 = 12$ números, que es lo que debe caber en caché en cada momento.
+El resultado, $C_{00}$, coincide con la esquina superior izquierda de *C* calculada en el capítulo 1. Repetido para los cuatro bloques de *C* son $(n/b)^3 = 8$ productos de bloques, cada uno trabajando únicamente sobre $3 \times 4 = 12$ números, que es lo que debe caber en caché en cada momento. La corrección del kernel bloqueado se verificó con esta misma matriz de $4 \times 4$ (`scripts/test_matriz_conocida.sh`), con $b = 2$, con $b = 3$ (que no divide a 4, así que el último bloque es de un solo elemento) y con tamaños distintos por dimensión ( $b_i = 2$, $b_k = 3$, $b_j = 1$ ), tanto en la versión serial como en la MPI. Con el $b = 64$ por defecto la matriz cabe en un solo bloque y esa prueba no ejercita la partición.
 
 **Por qué reduce el tráfico de memoria.** Con un modelo simplificado en el que un bloque que cabe en caché se carga una sola vez, cada bloque de *B* se trae $n/b$ veces (una por cada bloque de filas de *A*) en lugar de $n$ veces. En el ejemplo, *B* se lee 2 veces en lugar de 4; en general, el tráfico de *B* desde memoria principal se divide por el tamaño del bloque $b$. Cuanto mayor sea $b$, mayor es la reutilización, hasta el límite impuesto por la capacidad de la caché.
 
@@ -446,8 +446,8 @@ Las funciones se agrupan por su papel. La columna final indica dónde se usan en
 | `MPI_Gatherv` | Inverso de `Scatterv`: la raíz recolecta porciones de distinto tamaño. | Reconstrucción de *C* en el rank 0. |
 | `MPI_Reduce` | Combina un valor de cada proceso con una operación (suma, máximo…) en la raíz. | Solo en la referencia `PDGEMM`: obtener el **máximo** de los tiempos locales de cada fase (el tiempo de una ejecución paralela es el del proceso más lento). Las versiones 1D cronometran en el rank 0. |
 | `MPI_Barrier` | Sincroniza: nadie continúa hasta que todos llegan. | Alinear a todos los procesos antes de empezar a cronometrar. |
-| `MPI_Wtime` | Tiempo de reloj de pared en segundos. | Todas las mediciones. |
-| `MPI_Abort` | Termina todos los procesos ante un error. | Validación de argumentos y archivos. |
+| `MPI_Wtime` | Tiempo de reloj de pared en segundos. | Todas las mediciones de las versiones MPI. Las versiones seriales usan `clock_gettime(CLOCK_MONOTONIC)` (`src/common/timing.h`), que también mide reloj de pared. |
+| `MPI_Abort` | Termina todos los procesos ante un error. | Error al leer los archivos de entrada, error al calcular las particiones y número de procesos mayor que `MAX_PROCESOS`. Con argumentos de línea de comandos inválidos no se aborta: cada proceso imprime el uso y termina con `MPI_Finalize`. |
 
 ### 3.5 Esquema típico de un programa
 
@@ -551,6 +551,8 @@ La partición 1D se aplicó a las tres versiones seriales del capítulo 2. Como 
 | `mpi_ijk` | `ijk` | `src/mpi/matmul_ijk.c` |
 | `mpi_ikj` | `ikj` | `src/mpi/matmul_ikj.c` |
 | `mpi_ikj_bloqueado` | `ikj` con blocking | `src/mpi/matmul_ikj_bloqueado.c` |
+
+`mpi_ijk` se implementó y se verificó con la matriz conocida (`scripts/test_matriz_conocida.sh`), pero **no se midió** en el capítulo 7: su ineficiencia ya quedó comprobada en las corridas seriales del capítulo 2 y medirla con todos los $n$ y $p$ habría tardado demasiado.
 
 La estructura de comunicación es idéntica en las tres; solo cambia la llamada a la función de multiplicación. Ese desacople tiene una virtud metodológica: la diferencia de rendimiento entre las versiones paralelas se debe exclusivamente al kernel local, de modo que lo aprendido en el capítulo 2 se *compone* con la paralelización. En particular, la optimización de caché sigue siendo decisiva dentro de cada proceso, como se verá en el capítulo 7 (el `ikj` sin blocking apenas escala porque cada proceso sigue limitado por la memoria).
 
@@ -965,7 +967,7 @@ Lo que ScaLAPACK "ve" son $A^T$, $B^T$ y $C^T$. Entonces, en lugar de pedirle $C
 | *B* | $M \times P$ | $P \times M$ |
 | *C* | $N \times P$ | $P \times N$ |
 
-En la llamada a `pdgemm_` el primer operando es *B* y el segundo *A* (orden invertido), con $m = P$, $n = N$ y $k = M$. Los únicos cambios respecto de una llamada normal son las dimensiones transpuestas y el orden inverso de los operandos; **los datos nunca se tocan**. Se verificó la corrección con matrices enteras contra la versión serial (`scripts/test_matriz_conocida.sh`), con distintos tamaños de bloque y entre 1 y 8 procesos.
+En la llamada a `pdgemm_` el primer operando es *B* y el segundo *A* (orden invertido), con $m = P$, $n = N$ y $k = M$. Los únicos cambios respecto de una llamada normal son las dimensiones transpuestas y el orden inverso de los operandos; **los datos nunca se tocan**. Se verificó la corrección con matrices enteras contra la versión serial (`scripts/test_matriz_conocida.sh`), con una matriz de $4 \times 4$, tamaños de bloque $N_B \in \{ 1, 2, 3, 64\}$ (los tres primeros reparten la matriz entre varios procesos y el último es mayor que ella, de modo que queda en un solo proceso) y entre 1 y 8 procesos, lo que incluye grillas con bloques vacíos.
 
 
 ---

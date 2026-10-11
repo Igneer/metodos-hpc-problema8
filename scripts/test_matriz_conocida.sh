@@ -90,14 +90,30 @@ compilar mpicc matmul_ijk_mpi src/mpi/matmul_ijk.c src/common/matrix.c src/commo
 compilar mpicc matmul_ikj_mpi src/mpi/matmul_ikj.c src/common/matrix.c src/common/cli.c src/common/particiones.c
 compilar mpicc matmul_ikjb_mpi src/mpi/matmul_ikj_bloqueado.c src/common/matrix.c src/common/cli.c src/common/particiones.c
 
+# Con N=4 el bloque por defecto (64) cubre toda la matriz y el kernel bloqueado
+# hace una sola vuelta. Se prueban bloques que si la parten: 2 (divide a 4),
+# 3 (no divide: el ultimo bloque es de 1 elemento) y tamanios distintos por
+# dimension.
+BLOQUES_ETIQ=("BLOQUE=2" "BLOQUE=3" "BI=2 BK=3 BJ=1")
+BLOQUES_FLAGS=("-DBLOQUE=2" "-DBLOQUE=3" "-DBI=2 -DBK=3 -DBJ=1")
+for i in "${!BLOQUES_FLAGS[@]}"; do
+    compilar gcc "matmul_ikjb_s_$i" ${BLOQUES_FLAGS[$i]} src/serial/matmul_ikj_bloqueado.c src/common/matrix.c src/common/cli.c
+    compilar mpicc "matmul_ikjb_mpi_$i" ${BLOQUES_FLAGS[$i]} src/mpi/matmul_ikj_bloqueado.c src/common/matrix.c src/common/cli.c src/common/particiones.c
+done
+
 # La referencia ScaLAPACK es opcional: si no se puede enlazar, se omite.
+# Se compila con varios tamanios de bloque NB (con N=4: bloques de 1, 2 y 3
+# elementos que reparten la matriz entre varios procesos, y el valor por
+# defecto 64, mayor que N: un solo bloque y los demas procesos sin datos).
+NBS=(1 2 3 64)
 PDGEMM_OK=1
-if ! mpicc $CFLAGS src/ref/matmul_pdgemm.c src/common/matrix.c src/common/cli.c \
-        -o "$BIN_DIR/matmul_pdgemm" -lscalapack-openmpi -lopenblas -lm \
-        2>"$BIN_DIR/matmul_pdgemm.compile.log"; then
-    PDGEMM_OK=0
-    echo "AVISO: no se pudo compilar la referencia PDGEMM (ver bin/matmul_pdgemm.compile.log); se omite."
-fi
+for nb in "${NBS[@]}"; do
+    if ! mpicc $CFLAGS -DNB="$nb" src/ref/matmul_pdgemm.c src/common/matrix.c src/common/cli.c             -o "$BIN_DIR/matmul_pdgemm_nb$nb" -lscalapack-openmpi -lopenblas -lm             2>"$BIN_DIR/matmul_pdgemm_nb$nb.compile.log"; then
+        PDGEMM_OK=0
+        echo "AVISO: no se pudo compilar la referencia PDGEMM con NB=$nb (ver bin/matmul_pdgemm_nb$nb.compile.log); se omite."
+        break
+    fi
+done
 
 BIN_IJK_S="$BIN_DIR/matmul_ijk_s"
 BIN_IKJ_S="$BIN_DIR/matmul_ikj_s"
@@ -105,7 +121,6 @@ BIN_IKJB_S="$BIN_DIR/matmul_ikjb_s"
 BIN_IJK_MPI="$BIN_DIR/matmul_ijk_mpi"
 BIN_IKJ_MPI="$BIN_DIR/matmul_ikj_mpi"
 BIN_IKJB_MPI="$BIN_DIR/matmul_ikjb_mpi"
-BIN_PDGEMM="$BIN_DIR/matmul_pdgemm"
 
 echo ""
 echo "=== Corriendo ==="
@@ -120,13 +135,25 @@ for np in 1 3; do
     comparar_salida "mpi ikj_bloqueado (np=$np)" "$(mpirun -np "$np" "$BIN_IKJB_MPI" "${ARGS[@]}")"
 done
 
-# Grillas 2x2 (np=4) y 3x2 (np=6, con bloques vacios porque N=4).
-export OPENBLAS_NUM_THREADS=1
-for np in 1 2 3 4 6; do
-    if [ "$PDGEMM_OK" -eq 1 ]; then
-        comparar_salida "scalapack pdgemm (np=$np)" "$(mpirun --oversubscribe -np "$np" "$BIN_PDGEMM" "${ARGS[@]}")"
-    fi
+# ikj bloqueado con bloques que si parten la matriz (serial y MPI).
+for i in "${!BLOQUES_FLAGS[@]}"; do
+    etiqueta="${BLOQUES_ETIQ[$i]}"
+    comparar_salida "serial ikj_bloqueado ($etiqueta)" "$("$BIN_DIR/matmul_ikjb_s_$i" "${ARGS[@]}")"
+    for np in 1 3; do
+        comparar_salida "mpi ikj_bloqueado ($etiqueta, np=$np)" "$(mpirun -np "$np" "$BIN_DIR/matmul_ikjb_mpi_$i" "${ARGS[@]}")"
+    done
 done
+
+# Grillas 2x2 (np=4), 3x2 (np=6) y 4x2 (np=8); con N=4 algunas tienen
+# bloques vacios. Cada una se prueba con todos los NB compilados.
+export OPENBLAS_NUM_THREADS=1
+if [ "$PDGEMM_OK" -eq 1 ]; then
+    for nb in "${NBS[@]}"; do
+        for np in 1 2 3 4 6 8; do
+            comparar_salida "scalapack pdgemm (NB=$nb, np=$np)" "$(mpirun --oversubscribe -np "$np" "$BIN_DIR/matmul_pdgemm_nb$nb" "${ARGS[@]}")"
+        done
+    done
+fi
 
 echo ""
 echo "=== Resumen: $((TOTAL - FALLOS))/$TOTAL OK ==="

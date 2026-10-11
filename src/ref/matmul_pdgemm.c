@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
     Cblacs_gridinfo(ctx_grilla, &pr_g, &pc_g, &mi_fila, &mi_col);
     int soy_raiz = rank == 0;
 
-    /* A^T (MxN), B^T (PxM), C^T (PxN) en column-major; ver cabecera. */
+    /* A^T (MxN), B^T (PxM), C^T (PxN) en column-major*/
     int descA_g[9], descB_g[9], descC_g[9], descA[9], descB[9], descC[9];
     int filas_a, cols_a, filas_b, cols_b, filas_c, cols_c;
     describir_global(descA_g, M, N, ctx_raiz, soy_raiz);

@@ -46,3 +46,56 @@ int cli_parsear_argumentos(int argc, char **argv, ConfiguracionBenchmark *config
     if (config->repeticiones <= 0) config->repeticiones = 1;
     return 1;
 }
+
+int cli_cargar_matrices(const ConfiguracionBenchmark *config, real_t *a,
+                        real_t *b, int n, int m, int p) {
+    if (config->archivo_a) {
+        if (matriz_leer_archivo(a, n, m, config->archivo_a) != 0) {
+            fprintf(stderr, "Error leyendo %s\n", config->archivo_a);
+            return 1;
+        }
+    } else {
+        matriz_llenar_aleatoria(a, n, m, config->semilla);
+    }
+    if (config->archivo_b) {
+        if (matriz_leer_archivo(b, m, p, config->archivo_b) != 0) {
+            fprintf(stderr, "Error leyendo %s\n", config->archivo_b);
+            return 1;
+        }
+    } else {
+        matriz_llenar_aleatoria(b, m, p, config->semilla + 1);
+    }
+    return 0;
+}
+
+void cli_imprimir_encabezado(const ConfiguracionBenchmark *config,
+                             const char *algoritmo, const char *detalle,
+                             int procesos, int n, int m, int p) {
+    if (config->csv) {
+        printf(procesos > 0
+                   ? "n,m,p,procesos,algoritmo,repeticion,segundos,gflops,segundos_generacion\n"
+                   : "n,m,p,algoritmo,repeticion,segundos,gflops,segundos_generacion\n");
+        return;
+    }
+    printf("N=%d M=%d P=%d", n, m, p);
+    if (procesos > 0) printf(" procesos=%d", procesos);
+    printf(" algoritmo=%s", algoritmo);
+    if (detalle) printf(" (%s)", detalle);
+    printf(" repeticiones=%d\n", config->repeticiones);
+}
+
+void cli_imprimir_repeticion(const ConfiguracionBenchmark *config,
+                             const char *algoritmo, int procesos, int n, int m,
+                             int p, int repeticion, double segundos,
+                             double segundos_generacion) {
+    double gflops = 2.0 * (double)n * (double)m * (double)p / segundos / 1e9;
+    if (config->csv) {
+        printf("%d,%d,%d,", n, m, p);
+        if (procesos > 0) printf("%d,", procesos);
+        printf("%s,%d,%.9f,%.4f,%.9f\n", algoritmo, repeticion, segundos,
+               gflops, segundos_generacion);
+    } else {
+        printf("repeticion %d: %.6f s (%.3f GFLOPS)\n", repeticion, segundos,
+               gflops);
+    }
+}

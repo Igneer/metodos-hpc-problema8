@@ -26,47 +26,21 @@ int main(int argc, char **argv) {
     }
 
     double t_gen0 = ahora_segundos();
-    if (config.archivo_a) {
-        if (matriz_leer_archivo(A, N, M, config.archivo_a) != 0) {
-            fprintf(stderr, "Error leyendo %s\n", config.archivo_a);
-            return 1;
-        }
-    } else {
-        matriz_llenar_aleatoria(A, N, M, config.semilla);
-    }
-    if (config.archivo_b) {
-        if (matriz_leer_archivo(B, M, P, config.archivo_b) != 0) {
-            fprintf(stderr, "Error leyendo %s\n", config.archivo_b);
-            return 1;
-        }
-    } else {
-        matriz_llenar_aleatoria(B, M, P, config.semilla + 1);
+    if (cli_cargar_matrices(&config, A, B, N, M, P) != 0) {
+        return 1;
     }
     double segundos_generacion = ahora_segundos() - t_gen0;
 
-    double flops = 2.0 * (double)N * (double)M * (double)P;
-
-    if (config.csv) {
-        printf("n,m,p,algoritmo,repeticion,segundos,gflops,segundos_generacion\n");
-    } else {
-        printf("N=%d M=%d P=%d algoritmo=ijk repeticiones=%d\n",
-               N, M, P, config.repeticiones);
-    }
+    cli_imprimir_encabezado(&config, "ijk", NULL, 0, N, M, P);
 
     for (int r = 0; r < config.repeticiones; r++) {
         matriz_poner_cero(C, N, P);
         double t0 = ahora_segundos();
         multiplicar_ijk(A, B, C, N, M, P);
         double t1 = ahora_segundos();
-        double transcurrido = t1 - t0;
-        double gflops = flops / transcurrido / 1e9;
 
-        if (config.csv) {
-            printf("%d,%d,%d,ijk,%d,%.9f,%.4f,%.9f\n",
-                   N, M, P, r, transcurrido, gflops, segundos_generacion);
-        } else {
-            printf("repeticion %d: %.6f s (%.3f GFLOPS)\n", r, transcurrido, gflops);
-        }
+        cli_imprimir_repeticion(&config, "ijk", 0, N, M, P, r,
+                                t1 - t0, segundos_generacion);
         if (config.imprimir) {
             matriz_imprimir(C, N, P);
         }

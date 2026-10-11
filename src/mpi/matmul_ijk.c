@@ -5,7 +5,7 @@
 #include "../common/config.h"
 #include "../common/kernels.h"
 #include "../common/matrix.h"
-#include "../common/particiones.h"
+#include "../common/mpi_comun.h"
 
 static real_t A[(size_t)N * M];
 static real_t B[(size_t)M * P];
@@ -27,14 +27,6 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    if (size > MAX_PROCESOS) {
-        if (rank == 0) {
-            fprintf(stderr, "Error: %d procesos pedidos, MAX_PROCESOS=%d\n",
-                    size, MAX_PROCESOS);
-        }
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-
     char info_tamanio[64];
     snprintf(info_tamanio, sizeof(info_tamanio), "N=%d M=%d P=%d", N, M, P);
 
@@ -47,55 +39,20 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int estado = calcular_particiones((size_t)N, (size_t)M, size, MAX_PROCESOS,
-                                       sendcounts, displs);
-    if (estado != PARTICIONES_EXITO) {
-        if (rank == 0) fprintf(stderr, "Error al calcular las particiones de A.\n");
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-
-    /* C tiene P columnas, no M: si P != M la particion cambia. */
-    estado = calcular_particiones((size_t)N, (size_t)P, size, MAX_PROCESOS,
-                                   recvcounts_C, displs_C);
-    if (estado != PARTICIONES_EXITO) {
-        if (rank == 0) fprintf(stderr, "Error al calcular las particiones de C.\n");
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
+    mpi_preparar_particiones(rank, size, sendcounts, displs, recvcounts_C, displs_C);
 
     int mis_elementos_A = sendcounts[rank];
     size_t mis_filas = (size_t)mis_elementos_A / (size_t)M;
     int mis_elementos_C = (int)(mis_filas * (size_t)P);
 
     double t_gen0 = MPI_Wtime();
-    if (rank == 0) {
-        if (config.archivo_a) {
-            if (matriz_leer_archivo(A, N, M, config.archivo_a) != 0) {
-                fprintf(stderr, "Error leyendo %s\n", config.archivo_a);
-                MPI_Abort(MPI_COMM_WORLD, 1);
-            }
-        } else {
-            matriz_llenar_aleatoria(A, N, M, config.semilla);
-        }
-        if (config.archivo_b) {
-            if (matriz_leer_archivo(B, M, P, config.archivo_b) != 0) {
-                fprintf(stderr, "Error leyendo %s\n", config.archivo_b);
-                MPI_Abort(MPI_COMM_WORLD, 1);
-            }
-        } else {
-            matriz_llenar_aleatoria(B, M, P, config.semilla + 1);
-        }
+    if (rank == 0 && cli_cargar_matrices(&config, A, B, N, M, P) != 0) {
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
     double segundos_generacion = MPI_Wtime() - t_gen0;
 
-    double flops = 2.0 * (double)N * (double)M * (double)P;
-
     if (rank == 0) {
-        if (config.csv) {
-            printf("n,m,p,procesos,algoritmo,repeticion,segundos,gflops,segundos_generacion\n");
-        } else {
-            printf("N=%d M=%d P=%d procesos=%d algoritmo=ijk_mpi repeticiones=%d\n",
-                   N, M, P, size, config.repeticiones);
-        }
+        cli_imprimir_encabezado(&config, "ijk_mpi", NULL, size, N, M, P);
     }
 
     for (int r = 0; r < config.repeticiones; r++) {
@@ -116,16 +73,10 @@ int main(int argc, char *argv[]) {
                     C, recvcounts_C, displs_C, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
         double t1 = MPI_Wtime();
-        double transcurrido = t1 - t0;
 
         if (rank == 0) {
-            double gflops = flops / transcurrido / 1e9;
-            if (config.csv) {
-                printf("%d,%d,%d,%d,ijk_mpi,%d,%.9f,%.4f,%.9f\n",
-                       N, M, P, size, r, transcurrido, gflops, segundos_generacion);
-            } else {
-                printf("repeticion %d: %.6f s (%.3f GFLOPS)\n", r, transcurrido, gflops);
-            }
+            cli_imprimir_repeticion(&config, "ijk_mpi", size, N, M, P, r,
+                                    t1 - t0, segundos_generacion);
             if (config.imprimir) {
                 matriz_imprimir(C, N, P);
             }

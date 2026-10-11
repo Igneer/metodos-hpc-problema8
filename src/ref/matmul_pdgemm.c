@@ -109,17 +109,8 @@ int main(int argc, char *argv[]) {
     describir_distribuida(descC, P, N, ctx_grilla, mi_fila, mi_col, pr_g, pc_g, &filas_c, &cols_c);
 
     double t_gen0 = MPI_Wtime();
-    if (soy_raiz) {
-        if (config.archivo_a) {
-            if (matriz_leer_archivo(A, N, M, config.archivo_a) != 0) abortar("leyendo archivo A");
-        } else {
-            matriz_llenar_aleatoria(A, N, M, config.semilla);
-        }
-        if (config.archivo_b) {
-            if (matriz_leer_archivo(B, M, P, config.archivo_b) != 0) abortar("leyendo archivo B");
-        } else {
-            matriz_llenar_aleatoria(B, M, P, config.semilla + 1);
-        }
+    if (soy_raiz && cli_cargar_matrices(&config, A, B, N, M, P) != 0) {
+        abortar("leyendo archivos de entrada");
     }
     double segundos_generacion = MPI_Wtime() - t_gen0;
 

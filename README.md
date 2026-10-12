@@ -12,19 +12,6 @@
 
 ---
 
-
-## Introducción
-
-La multiplicación de matrices densas, $C = A \times B$, es una de las operaciones más estudiadas de la computación científica: tiene una definición elemental, un costo cúbico y una estructura de datos tan regular que casi cualquier estrategia de paralelización puede aplicarse y compararse con claridad. Este trabajo recorre el problema en tres etapas.
-
-En la primera se estudian tres versiones **seriales** del algoritmo. La versión ingenua `ijk` recorre la segunda matriz por columnas y desaprovecha la memoria caché; reordenar los bucles (`ikj`) elimina ese defecto, y el *blocking* (bloqueado por teselas) hace que los datos en uso permanezcan en caché. En una máquina de 16 cores y 24 GB de RAM, la versión bloqueada resultó entre 3,7 y 26,6 veces más rápida que la ingenua según el tamaño del problema.
-
-En la segunda etapa se paraleliza con **MPI** mediante una partición unidimensional (1D) por filas, implementada de forma propia sobre las tres versiones seriales. Se analizan sus beneficios (simplicidad, una sola difusión de *B*) y su limitación estructural: cada proceso debe almacenar una copia completa de *B*.
-
-En la tercera etapa se presenta la **partición bidimensional (2D)** como solución a esa limitación, se explica el algoritmo **SUMMA** con un ejemplo numérico completo y se justifica por qué su implementación propia quedó fuera del alcance del proyecto. En su lugar se estudió y utilizó **ScaLAPACK** (`PDGEMM`), que lo emplea internamente, como referencia 2D.
-
-El análisis de resultados, realizado en un equipo de 48 cores y 192 GB de RAM, confirma empíricamente los argumentos teóricos: la eficiencia cae al aumentar el número de procesos porque la comunicación y la contención de memoria no se reducen en la misma proporción que el cómputo (ley de Amdahl); y mejora al aumentar $n$ porque el cómputo crece como $O(n^3)$ mientras que la comunicación crece como $O(n^2)$. El informe cierra con mejoras posibles (generación y lectura distribuidas de las matrices, paginación, distribución dinámica, ejecución en clústeres y GPU) y con las bibliotecas que hoy dominan el área (SLATE, NVIDIA cuBLASMp).
-
 ## Contenido
 
 - [**1. El problema y su complejidad**](#1-el-problema-y-su-complejidad)  
@@ -112,6 +99,19 @@ El análisis de resultados, realizado en un equipo de 48 cores y 192 GB de RAM, 
   - [Algoritmos y teoría](#algoritmos-y-teoría)
   - [Álgebra lineal de alto rendimiento y bibliotecas](#álgebra-lineal-de-alto-rendimiento-y-bibliotecas)
   - [MPI](#mpi)
+
+## Introducción
+
+La multiplicación de matrices densas, $C = A \times B$, es una de las operaciones más estudiadas de la computación científica: tiene una definición elemental, un costo cúbico y una estructura de datos tan regular que casi cualquier estrategia de paralelización puede aplicarse y compararse con claridad. Este trabajo recorre el problema en tres etapas.
+
+En la primera se estudian tres versiones **seriales** del algoritmo. La versión ingenua `ijk` recorre la segunda matriz por columnas y desaprovecha la memoria caché; reordenar los bucles (`ikj`) elimina ese defecto, y el *blocking* (bloqueado por teselas) hace que los datos en uso permanezcan en caché. En una máquina de 16 cores y 24 GB de RAM, la versión bloqueada resultó entre 3,7 y 26,6 veces más rápida que la ingenua según el tamaño del problema.
+
+En la segunda etapa se paraleliza con **MPI** mediante una partición unidimensional (1D) por filas, implementada de forma propia sobre las tres versiones seriales. Se analizan sus beneficios (simplicidad, una sola difusión de *B*) y su limitación estructural: cada proceso debe almacenar una copia completa de *B*.
+
+En la tercera etapa se presenta la **partición bidimensional (2D)** como solución a esa limitación, se explica el algoritmo **SUMMA** con un ejemplo numérico completo y se justifica por qué su implementación propia quedó fuera del alcance del proyecto. En su lugar se estudió y utilizó **ScaLAPACK** (`PDGEMM`), que lo emplea internamente, como referencia 2D.
+
+El análisis de resultados, realizado en un equipo de 48 cores y 192 GB de RAM, confirma empíricamente los argumentos teóricos: la eficiencia cae al aumentar el número de procesos porque la comunicación y la contención de memoria no se reducen en la misma proporción que el cómputo (ley de Amdahl); y mejora al aumentar $n$ porque el cómputo crece como $O(n^3)$ mientras que la comunicación crece como $O(n^2)$. El informe cierra con mejoras posibles (generación y lectura distribuidas de las matrices, paginación, distribución dinámica, ejecución en clústeres y GPU) y con las bibliotecas que hoy dominan el área (SLATE, NVIDIA cuBLASMp).
+
 
 ## Entornos de medición
 

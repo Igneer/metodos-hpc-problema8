@@ -137,25 +137,20 @@ int main(int argc, char *argv[]) {
         double t0 = MPI_Wtime();
         pdgemr2d_(&n_a, &m_n, A, &uno, &uno, descA_g, A_local, &uno, &uno, descA, &ctx_grilla);
         pdgemr2d_(&n_b, &m_m, B, &uno, &uno, descB_g, B_local, &uno, &uno, descB, &ctx_grilla);
-        double t1 = MPI_Wtime();
         pdgemm_("N", "N", &dim_m, &dim_n, &dim_k, &alfa, B_local, &uno, &uno, descB,
                 A_local, &uno, &uno, descA, &beta, C_local, &uno, &uno, descC);
-        double t2 = MPI_Wtime();
         pdgemr2d_(&n_c, &m_n, C_local, &uno, &uno, descC, C, &uno, &uno, descC_g, &ctx_grilla);
-        double t3 = MPI_Wtime();
+        double t1 = MPI_Wtime();
 
-        double local[4] = {t3 - t0, t1 - t0, t2 - t1, t3 - t2}, maximo[4];
-        MPI_Reduce(local, maximo, 4, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-
+        double local = t1 - t0, maximo;
+        MPI_Reduce(&local, &maximo, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
         if (soy_raiz) {
-            double gflops = flops / maximo[0] / 1e9;
+            double gflops = flops / maximo / 1e9;
             if (config.csv) {
                 printf("%d,%d,%d,%d,pdgemm_2d,%d,%.9f,%.4f,%.9f\n",
-                       N, M, P, size, r, maximo[0], gflops, segundos_generacion);
+                       N, M, P, size, r, maximo, gflops, segundos_generacion);
             } else {
-                printf("repeticion %d: %.6f s (%.3f GFLOPS) "
-                       "[distribucion %.6f, PDGEMM %.6f, recoleccion %.6f]\n",
-                       r, maximo[0], gflops, maximo[1], maximo[2], maximo[3]);
+                printf("repeticion %d: %.6f s (%.3f GFLOPS)\n", r, maximo, gflops);
             }
             if (config.imprimir) matriz_imprimir(C, N, P);
         }

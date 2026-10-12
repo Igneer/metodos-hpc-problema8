@@ -27,17 +27,91 @@ El análisis de resultados, realizado en un equipo de 48 cores y 192 GB de RAM, 
 
 ## Contenido
 
-| Sección | Contenido |
-|---|---|
-| [1. El problema y su complejidad](#1-el-problema-y-su-complejidad) | Definición matemática, costo $O(n^3)$, por qué es *embarazosamente paralelo* y por qué sigue siendo un campo de estudio en MPI. |
-| [2. Implementaciones seriales](#2-implementaciones-seriales) | `ijk`, `ikj` y `ikj` con blocking; ejemplo numérico de bloques; comparación de las tres. |
-| [3. Paralelización con MPI](#3-paralelización-con-mpi) | Qué es MPI, su modelo y las funciones principales utilizadas. |
-| [4. Partición unidimensional (1D)](#4-partición-unidimensional-1d) | Estrategia, aplicación a las versiones seriales, beneficios y limitaciones. |
-| [5. Partición bidimensional y el algoritmo SUMMA](#5-partición-bidimensional-y-el-algoritmo-summa) | Distribución 2D, algoritmo SUMMA con ejemplo paso a paso y alcance del proyecto. |
-| [6. ScaLAPACK como referencia de la distribución 2D](#6-scalapack-como-referencia-de-la-distribución-2d) | Elección de la biblioteca, correspondencia función a función con SUMMA, optimizaciones y el truco del orden *column-major*. |
-| [7. Análisis de resultados](#7-análisis-de-resultados) | Métricas, gráficos, ley de Amdahl, efecto de $p$ y de $n$, contraste con los datos propios y comparación con entrada desde archivo (7.3), un bloque mayor (7.10), y segundo equipo (7.11). |
-| [8. Mejoras, líneas a evaluar y perspectivas](#8-mejoras-líneas-a-evaluar-y-perspectivas) | Mejoras derivadas de los resultados, técnicas a evaluar (solapamiento, paginación, distribución dinámica) y perspectivas (clústeres, GPU, SLATE y cuBLASMp). |
-| [9. Bibliografía](#9-bibliografía) | Fuentes citadas. |
+- [**1. El problema y su complejidad**](#1-el-problema-y-su-complejidad)  
+  <small>Definición matemática del producto de matrices, complejidad computacional \(O(n^3)\), paralelismo inherente y desafíos de la comunicación en MPI.</small>
+  - [1.1 Definición matemática](#11-definición-matemática)
+  - [1.2 Complejidad del algoritmo](#12-complejidad-del-algoritmo)
+  - [1.3 Un problema embarazosamente paralelo](#13-un-problema-embarazosamente-paralelo)
+  - [1.4 ¿Por qué sigue siendo un campo de estudio en MPI?](#14-por-qué-entonces-es-un-campo-de-estudio-en-mpi)
+
+- [**2. Implementaciones seriales**](#2-implementaciones-seriales)  
+  <small>Optimización progresiva mediante reordenamiento de bucles, aprovechamiento de la caché y blocking (teselado), con ejemplos y resultados experimentales.</small>
+  - [2.1 Versión `ijk`: la definición sin optimizar](#21-versión-ijk-la-definición-sin-optimizar)
+  - [2.2 Primera mejora: reordenar los bucles (`ikj`)](#22-primera-mejora-reordenar-los-bucles-ikj)
+  - [2.3 Segunda mejora: blocking (teselado)](#23-segunda-mejora-blocking-teselado)
+    - Ejemplo numérico con bloques
+    - Elección del tamaño de bloque
+  - [2.4 Datos y entorno de la comparación](#24-datos-y-entorno-de-la-comparación)
+  - [2.5 Resultados](#25-resultados)
+
+- [**3. Paralelización con MPI**](#3-paralelización-con-mpi)  
+  <small>Modelo de memoria distribuida, ejecución SPMD, comunicaciones colectivas y funciones MPI utilizadas en el proyecto.</small>
+  - [3.1 Qué es MPI](#31-qué-es-mpi)
+  - [3.2 Por qué MPI para este trabajo](#32-por-qué-mpi-para-este-trabajo)
+  - [3.3 Conceptos básicos](#33-conceptos-básicos)
+  - [3.4 Funciones principales](#34-funciones-principales)
+  - [3.5 Esquema típico de un programa](#35-esquema-típico-de-un-programa)
+  - [3.6 Costo de comunicar](#36-costo-de-comunicar)
+
+- [**4. Partición unidimensional (1D)**](#4-partición-unidimensional-1d)  
+  <small>Distribución por filas, implementación de los kernels seriales con MPI, equilibrio de carga, costos de comunicación y limitaciones de memoria.</small>
+  - [4.1 Primera elección: dividir por filas](#41-primera-elección-dividir-por-filas)
+  - [4.2 Funcionamiento](#42-funcionamiento)
+  - [4.3 Aplicación a las versiones seriales anteriores](#43-aplicación-a-las-versiones-seriales-anteriores)
+  - [4.4 Beneficios](#44-beneficios)
+  - [4.5 Limitaciones](#45-limitaciones)
+
+- [**5. Partición bidimensional y el algoritmo SUMMA**](#5-partición-bidimensional-y-el-algoritmo-summa)  
+  <small>Distribución en una grilla de procesos 2D, comunicación por filas y columnas, ejemplo numérico paso a paso y alcance de la implementación propia.</small>
+  - [5.1 La distribución 2D como solución a las limitaciones de la 1D](#51-la-distribución-2d-como-solución-a-las-limitaciones-de-la-1d)
+  - [5.2 El algoritmo SUMMA](#52-el-algoritmo-summa)
+    - Ejemplo paso a paso
+  - [5.3 Alcance del proyecto: la implementación propia](#53-alcance-del-proyecto-la-implementación-propia)
+
+- [**6. ScaLAPACK como referencia de la distribución 2D**](#6-scalapack-como-referencia-de-la-distribución-2d)  
+  <small>Uso de `PDGEMM` como referencia, relación con SUMMA, optimizaciones de álgebra lineal y adaptación del orden de almacenamiento de las matrices.</small>
+  - [6.1 Por qué ScaLAPACK](#61-por-qué-scalapack)
+  - [6.2 Cada función de ScaLAPACK y el paso de SUMMA que realiza](#62-cada-función-de-scalapack-y-el-paso-de-summa-que-realiza)
+  - [6.3 Qué ocurre dentro de `PDGEMM`](#63-qué-ocurre-dentro-de-pdgemm)
+  - [6.4 Optimizaciones que incorpora](#64-optimizaciones-que-incorpora)
+  - [6.5 El problema del orden en memoria y el artilugio matemático](#65-el-problema-del-orden-en-memoria-y-el-artilugio-matemático)
+
+- [**7. Análisis de resultados**](#7-análisis-de-resultados)  
+  <small>Evaluación experimental del rendimiento, speedup, eficiencia, ley de Amdahl, escalabilidad, distribución 1D frente a 2D y comparación entre equipos.</small>
+  - [7.1 Diseño experimental y métricas](#71-diseño-experimental-y-métricas)
+  - [7.2 Panorama general](#72-panorama-general)
+  - [7.3 La ley de Amdahl y la fracción no paralelizable](#73-la-ley-de-amdahl-y-la-fracción-no-paralelizable)
+    - Generación serial
+    - Fracción serial experimental (Karp-Flatt)
+    - Entrada desde archivo
+    - Lectura paralela en MPI: mejora no realizada
+  - [7.5 Por qué un \(n\) grande favorece el speedup](#75-por-qué-un-n-grande-favorece-el-speedup)
+  - [7.6 Por qué la eficiencia cae con \(p\) grande](#76-por-qué-la-eficiencia-cae-con-p-grande)
+  - [7.7 Partición 1D frente a 2D](#77-partición-1d-frente-a-2d)
+  - [7.8 Limitaciones del estudio](#78-limitaciones-del-estudio)
+  - [7.9 Conclusiones del análisis](#79-conclusiones-del-análisis)
+  - [7.10 Efecto de un bloque mayor: \(b=160\) frente a \(b=64\)](#710-efecto-de-un-bloque-mayor-b-160-frente-a-b-64)
+  - [7.11 Replicación en un segundo equipo (i5-7400)](#711-replicación-en-un-segundo-equipo-i5-7400)
+  - [7.12 Memoria por proceso: 1D frente a 2D](#712-memoria-por-proceso-1d-frente-a-2d)
+
+- [**8. Mejoras, líneas a evaluar y perspectivas**](#8-mejoras-líneas-a-evaluar-y-perspectivas)  
+  <small>Propuestas de optimización derivadas de las mediciones, técnicas pendientes de evaluación y perspectivas de ejecución en clústeres y GPU.</small>
+  - [8.1 Mejoras derivadas de los resultados](#81-mejoras-derivadas-de-los-resultados)
+    - Generación y lectura distribuidas de las matrices
+    - Otras mejoras relacionadas con los resultados
+  - [8.2 Líneas a evaluar](#82-líneas-a-evaluar)
+    - Solapamiento de comunicación y cómputo
+    - Estrategias de paginación
+    - Estrategias de distribución dinámica
+  - [8.3 Perspectivas](#83-perspectivas)
+    - Clústeres con nodos y GPU
+    - Bibliotecas optimizadas: SLATE y NVIDIA cuBLASMp
+
+- [**9. Bibliografía**](#9-bibliografía)  
+  <small>Referencias sobre algoritmos paralelos, álgebra lineal de alto rendimiento, bibliotecas especializadas y MPI.</small>
+  - [Algoritmos y teoría](#algoritmos-y-teoría)
+  - [Álgebra lineal de alto rendimiento y bibliotecas](#álgebra-lineal-de-alto-rendimiento-y-bibliotecas)
+  - [MPI](#mpi)
 
 ## Entornos de medición
 
